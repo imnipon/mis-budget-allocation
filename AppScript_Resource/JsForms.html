@@ -1,0 +1,671 @@
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   JsForms — ส่วนหลังบ้าน: ฟอร์มกำหนดงบ / รายการใช้งบ / สิทธิ์ / ผู้ใช้
+   ทุกฟอร์มที่เปลี่ยนแปลงข้อมูลบังคับ "เหตุผล" และแนบไฟล์ได้
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ───────── ตัวช่วยอัปโหลดไฟล์ ───────── */
+window.Upload = {
+  files: [],
+  reset: function () { Upload.files = []; },
+  widget: function (label) {
+    return '<div class="field"><label>' + esc(label || 'ไฟล์แนบ (เอกสารอนุมัติ / ใบเสร็จ)') + '</label>' +
+      '<div class="drop" id="dropZone" onclick="el(\'fileInput\').click()">' +
+      '<div class="drop-ico">📎</div><p>คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวาง</p>' +
+      '<small>PDF, รูปภาพ, Excel, Word · ไม่เกิน 10 MB ต่อไฟล์ · สูงสุด 5 ไฟล์</small></div>' +
+      '<input type="file" id="fileInput" multiple class="hidden" onchange="Upload.pick(this.files)">' +
+      '<div class="file-list" id="fileList"></div></div>';
+  },
+  mount: function () {
+    const dz = el('dropZone');
+    if (!dz) return;
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); });
+    });
+    dz.addEventListener('drop', function (e) { Upload.pick(e.dataTransfer.files); });
+    Upload.paint();
+  },
+  pick: function (fileList) {
+    const arr = Array.prototype.slice.call(fileList || []);
+    arr.forEach(function (f) {
+      if (Upload.files.length >= 5) return UI.err('แนบได้ไม่เกิน 5 ไฟล์');
+      if (f.size > 10 * 1024 * 1024) return UI.err('ไฟล์ใหญ่เกิน 10 MB', f.name);
+      const reader = new FileReader();
+      reader.onload = function () {
+        Upload.files.push({
+          name: f.name, mimeType: f.type || 'application/octet-stream',
+          size: f.size, dataBase64: String(reader.result).split(',')[1]
+        });
+        Upload.paint();
+      };
+      reader.readAsDataURL(f);
+    });
+  },
+  remove: function (i) { Upload.files.splice(i, 1); Upload.paint(); },
+  paint: function () {
+    const list = el('fileList');
+    if (!list) return;
+    list.innerHTML = Upload.files.map(function (f, i) {
+      return '<div class="file-item"><span>📄</span><span class="fname">' + esc(f.name) + '</span>' +
+        '<span class="fsize">' + Fmt.size(f.size) + '</span>' +
+        '<button class="icon-btn" style="width:24px;height:24px;font-size:13px" onclick="Upload.remove(' + i + ')">✕</button></div>';
+    }).join('');
+  }
+};
+
+/* ───────── ตัวช่วยฟอร์ม ───────── */
+window.F = {
+  text: function (name, label, opt) {
+    opt = opt || {};
+    const value = (opt.value === 0 || opt.value) ? opt.value : '';
+    return '<div class="field"><label>' + esc(label) + (opt.tip ? C.tip(opt.tip) : '') +
+      (opt.required ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<input type="' + (opt.type || 'text') + '" id="' + name + '" value="' + attr(value) + '"' +
+      (opt.placeholder ? ' placeholder="' + attr(opt.placeholder) + '"' : '') +
+      (opt.step ? ' step="' + opt.step + '"' : '') + (opt.cls ? ' class="' + opt.cls + '"' : '') + '>' +
+      (opt.hint ? '<div class="hint">' + opt.hint + '</div>' : '') + '</div>';
+  },
+  money: function (name, label, opt) {
+    opt = opt || {};
+    opt.type = 'number'; opt.step = '0.01'; opt.cls = 'money';
+    return F.text(name, label, opt);
+  },
+  area: function (name, label, opt) {
+    opt = opt || {};
+    return '<div class="field"><label>' + esc(label) + (opt.required ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<textarea id="' + name + '"' + (opt.placeholder ? ' placeholder="' + attr(opt.placeholder) + '"' : '') + '>' +
+      esc(opt.value || '') + '</textarea>' + (opt.hint ? '<div class="hint">' + opt.hint + '</div>' : '') + '</div>';
+  },
+  select: function (name, label, options, value, opt) {
+    opt = opt || {};
+    return '<div class="field"><label>' + esc(label) + (opt.tip ? C.tip(opt.tip) : '') +
+      (opt.required ? ' <span class="req">*</span>' : '') + '</label>' +
+      '<select id="' + name + '"' + (opt.onchange ? ' onchange="' + opt.onchange + '"' : '') + '>' +
+      options.map(function (o) {
+        return '<option value="' + attr(o[0]) + '"' + (String(value) === String(o[0]) ? ' selected' : '') + '>' +
+          esc(o[1]) + '</option>';
+      }).join('') + '</select>' + (opt.hint ? '<div class="hint">' + opt.hint + '</div>' : '') + '</div>';
+  },
+  val: function (id) { const n = el(id); return n ? n.value : ''; },
+  num: function (id) { const v = F.val(id); return v === '' ? '' : Number(v); },
+  footer: function (submitLabel, handler, opt) {
+    opt = opt || {};
+    return '<button class="btn btn-outline" onclick="UI.closeDrawer()">ยกเลิก</button>' +
+      '<button class="btn ' + (opt.danger ? 'btn-danger' : 'btn-primary') + '" id="submitBtn" onclick="' + handler + '">' +
+      esc(submitLabel) + '</button>';
+  },
+  submitting: function (on, label) {
+    const b = el('submitBtn');
+    if (!b) return;
+    b.disabled = on;
+    b.textContent = on ? 'กำลังบันทึก…' : (label || 'บันทึก');
+  }
+};
+
+window.Forms = window.Forms || {};
+
+/* ───────────── งบประมาณ: สร้าง / แก้ไข ───────────── */
+Forms._emailMulti = function (id, label, selected, users, hint) {
+  selected = selected || [];
+  const set = {};
+  selected.forEach(function (e) { set[String(e).toLowerCase()] = true; });
+  return '<div class="field"><label>' + esc(label) + C.tip(hint || '') + '</label>' +
+    '<div class="msel" id="' + id + '">' +
+    (users.length ? users.map(function (u) {
+      const on = !!set[u.email.toLowerCase()];
+      return '<label><input type="checkbox" value="' + attr(u.email) + '"' + (on ? ' checked' : '') + '>' +
+        esc(u.displayName || u.email) + ' <span class="dim">(' + esc(u.email) + ')</span></label>';
+    }).join('') : '<div class="dim" style="padding:6px">ยังไม่มีผู้ใช้ในระบบ — ไปเมนูผู้ใช้และสิทธิ์เพื่อเพิ่มก่อน</div>') +
+    '</div></div>';
+};
+Forms._emailsOf = function (id) {
+  return qsa('#' + id + ' input:checked').map(function (n) { return n.value; });
+};
+
+Forms.budget = function (budgetId) {
+  const b = budgetId ? App.budget(budgetId) : null;
+  const isNew = !b;
+  if (isNew && !State.user.isSuperAdmin) return UI.err('เฉพาะผู้ดูแลระบบเท่านั้นที่สร้างงบใหม่ได้');
+
+  const run = function (detail) {
+    const usersThen = function (users) {
+      const owners = detail ? (detail.owners || []) : (b ? [b.ownerEmail].filter(Boolean) : [State.user.email]);
+      const txnManagers = detail ? (detail.txnManagers || []) : [];
+      const viewers = detail ? (detail.viewers || []) : [];
+
+      UI.openDrawer({
+        title: isNew ? 'สร้างงบประมาณใหม่' : 'แก้ไขข้อมูลงบ ' + b.code,
+        subtitle: isNew ? 'เลือกประเภทจากทะเบียน · กำหนดสิทธิ์ในหน้านี้' : 'เปลี่ยนวงเงินใช้เมนู "ปรับวงเงิน" เพื่อเก็บประวัติ',
+        body:
+          (function () {
+            const types = (State.budgetTypes || []).slice();
+            const cur = b ? String(b.code || '').toUpperCase() : '';
+            if (cur && !types.some(function (t) { return t.code === cur; })) {
+              types.push({ code: cur, name: cur + ' (ไม่อยู่ในทะเบียนหรือถูกระงับ)' });
+            }
+            const typeOpts = types.map(function (t) {
+              return [t.code, t.code + ' – ' + (t.name || t.code)];
+            });
+            if (!typeOpts.length) {
+              typeOpts.push(['', '— ยังไม่มีประเภท —']);
+            }
+            return '<div class="field-row">' +
+              F.select('fCode', 'ประเภทงบประมาณ', typeOpts, cur || (typeOpts[0] && typeOpts[0][0]) || '', {
+                required: true,
+                tip: 'เลือกจากทะเบียนประเภท (ผู้ดูแลระบบจัดการที่ หลังบ้าน › จัดการประเภท) รหัสเดียวกันมีได้หลายโครงการ'
+              }) +
+              F.text('fFY', 'ปีงบประมาณ / ช่วงเวลา', {
+                value: b ? b.fiscalYear : '', placeholder: 'เช่น ปีงบ ' + new Date().getFullYear(),
+                tip: 'ข้อความอิสระ เช่น ปีงบ 2026 หรือ ปีงบ 2569'
+              }) +
+              '</div>';
+          })() +
+          F.text('fName', 'ชื่อโครงการ', { required: true, value: b ? b.name : '', placeholder: 'เช่น โครงการพัฒนาระบบสารสนเทศ' }) +
+          F.area('fDesc', 'คำอธิบาย', { value: b ? b.description : '', placeholder: 'ขอบเขตการใช้งบ เงื่อนไข ฯลฯ' }) +
+          Forms._emailMulti('fOwners', 'ผู้รับผิดชอบ', owners, users,
+            'แก้ข้อมูลงบ ปรับวงเงิน และบันทึกรายการได้ · คนแรก = ผู้รับผิดชอบหลักบนการ์ด') +
+          Forms._emailMulti('fTxnMgrs', 'ผู้จัดการรายการ', txnManagers, users,
+            'เพิ่ม/แก้ไขรายการจอง–เบิกได้ แต่ปรับวงเงินไม่ได้') +
+          Forms._emailMulti('fViewers', 'ผู้ดู (dashboard)', viewers, users,
+            'ดูยอดและรายการของงบนี้เท่านั้น ไม่เห็นประวัติการเปลี่ยนแปลง') +
+          (isNew
+            ? '<div class="callout" style="margin-bottom:15px"><span class="ci">ℹ</span><div>' +
+              '<b>วงเงินงบประมาณ</b> = ยอดอนุมัติทั้งก้อน · <b>จำนวนที่ใช้ได้</b> = ยอดที่อนุญาตให้จอง/เบิก (≤ วงเงิน)</div></div>' +
+              '<div class="field-row">' +
+              F.money('fBudget', 'วงเงินงบประมาณ (บาท)', { required: true, value: 0 }) +
+              F.money('fUsable', 'จำนวนที่ใช้ได้ (บาท)', { value: 0 }) +
+              '</div>' +
+              F.area('fReason', 'รายละเอียด/ที่มาของงบ', { required: true, placeholder: 'เช่น อนุมัติตามบันทึก …' }) +
+              F.text('fRef', 'เลขที่เอกสารอ้างอิง', { placeholder: 'เช่น บันทึกข้อความเลขที่ …' })
+            : F.select('fStatus', 'สถานะงบประมาณ',
+                [['NEW', 'New'], ['PROCESS', 'Process'], ['CLOSED', 'Close']], b.status,
+                { tip: 'New=เพิ่งสร้าง · Process=กำลังใช้ · Close=ปิดแล้วอ่านอย่างเดียว' }) +
+              F.area('fReason', 'เหตุผลการแก้ไข', { required: true, placeholder: 'ระบุเหตุผลเพื่อบันทึกใน Audit Log' })) +
+          Upload.widget(isNew ? 'เอกสารอนุมัติงบ (ถ้ามี)' : 'เอกสารประกอบการแก้ไข (ถ้ามี)'),
+        footer: F.footer(isNew ? 'สร้างงบประมาณ' : 'บันทึกการแก้ไข',
+          isNew ? 'Forms.submitBudgetCreate()' : 'Forms.submitBudgetUpdate(\'' + attr(budgetId) + '\')'),
+        onMount: Upload.mount
+      });
+    };
+    api('user.emails').then(usersThen).catch(function () { usersThen([]); });
+  };
+
+  if (!isNew && !State.detailCache[budgetId]) {
+    api('budget.detail', { budgetId: budgetId }).then(function (d) {
+      State.detailCache[budgetId] = d;
+      run(d);
+    }).catch(function (e) { UI.err(e.message); });
+  } else {
+    run(isNew ? null : State.detailCache[budgetId]);
+  }
+};
+
+Forms.submitBudgetCreate = function () {
+  const owners = Forms._emailsOf('fOwners');
+  const payload = {
+    code: F.val('fCode'), name: F.val('fName'), fiscalYear: F.val('fFY'),
+    description: F.val('fDesc'), owners: owners,
+    txnManagers: Forms._emailsOf('fTxnMgrs'), viewers: Forms._emailsOf('fViewers'),
+    budgetAmount: F.num('fBudget'), usableAmount: F.num('fUsable'),
+    reason: F.val('fReason'), refNo: F.val('fRef'), files: Upload.files
+  };
+  if (!payload.code) return UI.err('กรุณาเลือกประเภทงบประมาณ');
+  if (!payload.name) return UI.err('กรุณาระบุชื่อโครงการ');
+  if (!owners.length) return UI.err('เลือกผู้รับผิดชอบอย่างน้อย 1 คน');
+  if (String(payload.reason).length < 5) return UI.err('กรุณาระบุรายละเอียด/ที่มาของงบ');
+  F.submitting(true);
+  api('budget.create', payload).then(function (r) {
+    UI.closeDrawer();
+    UI.ok('สร้างงบประมาณเรียบร้อย', payload.code + ' – ' + payload.name);
+    App.reload().then(function () { Router.go('#/budget/' + r.budgetId); });
+  }).catch(function (e) { F.submitting(false, 'สร้างงบประมาณ'); UI.err('สร้างไม่สำเร็จ', e.message); });
+};
+
+Forms.submitBudgetUpdate = function (budgetId) {
+  const owners = Forms._emailsOf('fOwners');
+  const payload = {
+    budgetId: budgetId, code: F.val('fCode'), name: F.val('fName'), fiscalYear: F.val('fFY'),
+    description: F.val('fDesc'), status: F.val('fStatus'),
+    owners: owners, txnManagers: Forms._emailsOf('fTxnMgrs'), viewers: Forms._emailsOf('fViewers'),
+    reason: F.val('fReason'), files: Upload.files
+  };
+  if (!owners.length) return UI.err('ต้องมีผู้รับผิดชอบอย่างน้อย 1 คน');
+  if (String(payload.reason).length < 5) return UI.err('กรุณาระบุเหตุผลการแก้ไข');
+  F.submitting(true);
+  api('budget.update', payload).then(function () {
+    UI.closeDrawer(); UI.ok('บันทึกการแก้ไขแล้ว');
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'บันทึกการแก้ไข'); UI.err('บันทึกไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── กำหนด/ปรับ วงเงิน และจำนวนที่ใช้ได้ (หน้าเดียว) ───────────── */
+Forms.amount = function (budgetId) {
+  const b = App.budget(budgetId);
+  if (!b) return UI.err('ไม่พบข้อมูลงบประมาณ');
+  const d = State.detailCache[budgetId];
+  const s = (d && d.summary) || b.summary;
+
+  UI.openDrawer({
+    title: 'ปรับจำนวนเงิน – งบ ' + b.code,
+    subtitle: b.name,
+    body:
+      '<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding:14px">' +
+      '<table class="tbl"><tbody>' +
+      '<tr><td>วงเงินงบประมาณปัจจุบัน</td><td class="r num">' + Fmt.money(s.budgetAmount) + '</td></tr>' +
+      '<tr><td>จำนวนที่ใช้ได้ปัจจุบัน</td><td class="r num">' + Fmt.money(s.usableAmount) + '</td></tr>' +
+      '<tr><td>ผูกพันแล้ว (จองค้าง + เบิก)</td><td class="r num">' + Fmt.money(s.committed) + '</td></tr>' +
+      '<tr><td><b>คงเหลือใช้ได้</b></td><td class="r num"><b>' + Fmt.money(s.availableToSpend) + '</b></td></tr>' +
+      '</tbody></table></div></div>' +
+      '<div class="field-row">' +
+      F.money('fBudgetAmt', 'วงเงินงบประมาณใหม่ (บาท)', {
+        required: true, value: s.budgetAmount, tip: 'ยอดอนุมัติทั้งก้อนของโครงการ' }) +
+      F.money('fUsableAmt', 'จำนวนที่ใช้ได้ใหม่ (บาท)', {
+        required: true, value: s.usableAmount, tip: 'ยอดที่อนุญาตให้จอง/เบิกได้จริง ต้องไม่เกินวงเงิน' }) +
+      '</div>' +
+      '<div id="amountHint"></div>' +
+      '<div class="field-row">' +
+      F.text('fEffective', 'วันที่มีผล', { type: 'date', value: (new Date()).toISOString().substring(0, 10) }) +
+      F.text('fRef', 'เลขที่เอกสารอ้างอิง', { placeholder: 'บันทึก/คำสั่งเลขที่' }) +
+      '</div>' +
+      F.area('fReason', 'รายละเอียดการเปลี่ยนแปลง', { required: true,
+        placeholder: 'เช่น โอนเพิ่มงบ / ปล่อยวงเงินงวดที่ 2',
+        hint: 'บันทึกครั้งเดียว — ระบบแยกประวัติวงเงินและจำนวนที่ใช้ได้ให้อัตโนมัติ' }) +
+      Upload.widget('เอกสารอนุมัติการเปลี่ยนแปลง'),
+    footer: F.footer('บันทึกการเปลี่ยนแปลง', 'Forms.submitAmount(\'' + attr(budgetId) + '\')'),
+    onMount: function () {
+      Upload.mount();
+      const hint = function () { Forms._amountHint(s); };
+      el('fBudgetAmt').addEventListener('input', hint);
+      el('fUsableAmt').addEventListener('input', hint);
+      hint();
+    }
+  });
+};
+
+Forms._amountHint = function (s) {
+  const nb = Number(F.val('fBudgetAmt') || 0);
+  const nu = Number(F.val('fUsableAmt') || 0);
+  let html = '';
+  if (nu > nb) {
+    html = '<div class="callout danger"><span class="ci">✕</span><div>จำนวนที่ใช้ได้ต้องไม่เกินวงเงินงบประมาณ</div></div>';
+  } else if (nu < s.committed) {
+    html = '<div class="callout danger"><span class="ci">✕</span><div>ต่ำกว่ายอดที่ผูกพันแล้ว ' +
+      Fmt.money(s.committed) + ' บาท</div></div>';
+  } else if (nb !== s.budgetAmount || nu !== s.usableAmount) {
+    html = '<div class="callout ok"><span class="ci">✓</span><div>คงเหลือใช้ได้จะเป็น <b>' +
+      Fmt.money(nu - s.committed) + ' บาท</b> · ยังไม่ปล่อย ' + Fmt.money(nb - nu) + ' บาท</div></div>';
+  }
+  el('amountHint').innerHTML = html ? '<div style="margin-bottom:15px">' + html + '</div>' : '';
+};
+
+Forms.submitAmount = function (budgetId) {
+  const payload = {
+    budgetId: budgetId,
+    budgetAmount: F.num('fBudgetAmt'), usableAmount: F.num('fUsableAmt'),
+    reason: F.val('fReason'), refNo: F.val('fRef'), effectiveDate: F.val('fEffective'),
+    files: Upload.files
+  };
+  if (payload.budgetAmount === '' || isNaN(payload.budgetAmount)) return UI.err('กรุณาระบุวงเงินงบประมาณ');
+  if (payload.usableAmount === '' || isNaN(payload.usableAmount)) return UI.err('กรุณาระบุจำนวนที่ใช้ได้');
+  if (String(payload.reason).length < 5) return UI.err('กรุณาระบุรายละเอียดการเปลี่ยนแปลง (อย่างน้อย 5 ตัวอักษร)');
+  F.submitting(true);
+  api('budget.setAmounts', payload).then(function () {
+    UI.closeDrawer(); UI.ok('บันทึกการเปลี่ยนแปลงวงเงินแล้ว', 'ระบบได้เก็บ log เรียบร้อย');
+    State.detailCache = {};
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'บันทึกการเปลี่ยนแปลง'); UI.err('บันทึกไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── รายการใช้งบ: เพิ่ม ───────────── */
+Forms.txn = function (budgetId, txnType, reserveTxnId) {
+  const manageable = State.budgets.filter(function (b) { return b.canManageTxn || b.canManage; });
+  if (!manageable.length) return UI.err('คุณไม่มีสิทธิ์บันทึกรายการใช้งบ');
+  const bid = budgetId || manageable[0].budgetId;
+  const type = txnType || 'RESERVE';
+  Forms._prefillReserveId = reserveTxnId || '';
+
+  UI.openDrawer({
+    title: 'บันทึกรายการใช้งบ',
+    subtitle: 'การจอง = กันวงเงินล่วงหน้า · การเบิก = จ่ายจริงแล้ว' + (reserveTxnId ? ' (เบิกจากรายการจอง)' : ''),
+    body:
+      '<div class="seg" style="margin-bottom:16px">' +
+      '<button id="segR" class="' + (type === 'RESERVE' ? 'on' : '') + '" onclick="Forms.txnSwitch(\'RESERVE\')">◷ การจอง</button>' +
+      '<button id="segD" class="' + (type === 'DISBURSE' ? 'on' : '') + '" onclick="Forms.txnSwitch(\'DISBURSE\')">✓ เบิกใช้แล้ว</button>' +
+      '</div>' +
+      '<input type="hidden" id="fTxnType" value="' + type + '">' +
+      F.select('fBudgetId', 'งบประมาณ / โครงการ', manageable.map(function (b) {
+        return [b.budgetId, b.code + ' – ' + b.name];
+      }), bid, { required: true, onchange: 'Forms.txnBudgetChanged()' }) +
+      '<div id="budgetStat"></div>' +
+      '<div id="reserveRefBox"></div>' +
+      '<div class="field-row">' +
+      F.money('fAmount', 'จำนวนเงิน (บาท)', { required: true, value: '' }) +
+      F.text('fDate', 'วันที่รายการ', { type: 'date', value: (new Date()).toISOString().substring(0, 10) }) +
+      '</div>' +
+      F.text('fTitle', 'ชื่อ/รายละเอียดรายการ', { required: true, placeholder: 'เช่น จัดซื้อเครื่องคอมพิวเตอร์ 5 เครื่อง' }) +
+      '<div class="field-row">' +
+      F.text('fCategory', 'หมวด', { placeholder: 'ครุภัณฑ์ / จ้างเหมา / เดินทาง',
+        hint: State.categories.length ? 'ที่ใช้อยู่: ' + State.categories.slice(0, 6).map(esc).join(', ') : '' }) +
+      F.text('fVendor', 'คู่ค้า / ผู้รับเงิน', { placeholder: 'ชื่อบริษัท หรือชื่อผู้รับ' }) +
+      '</div>' +
+      F.text('fTxnNo', 'เลขที่รายการ', { placeholder: 'เว้นว่างเพื่อให้ระบบสร้างให้อัตโนมัติ' }) +
+      F.area('fDesc', 'หมายเหตุเพิ่มเติม', { placeholder: 'รายละเอียด เงื่อนไข งวดการจ่าย ฯลฯ' }) +
+      Upload.widget('ไฟล์แนบ (ใบขออนุมัติ / ใบเสร็จ / สัญญา)'),
+    footer: F.footer('บันทึกรายการ', 'Forms.submitTxn()'),
+    onMount: function () {
+      Upload.mount();
+      Forms.txnBudgetChanged();
+    }
+  });
+};
+
+Forms.txnSwitch = function (type) {
+  el('fTxnType').value = type;
+  el('segR').classList.toggle('on', type === 'RESERVE');
+  el('segD').classList.toggle('on', type === 'DISBURSE');
+  Forms.txnBudgetChanged();
+};
+
+Forms.txnBudgetChanged = function () {
+  const bid = F.val('fBudgetId');
+  const type = F.val('fTxnType');
+  const b = App.budget(bid);
+  if (b) {
+    const s = b.summary;
+    el('budgetStat').innerHTML =
+      '<div class="callout ' + (s.availableToSpend <= 0 ? 'danger' : 'ok') + '" style="margin-bottom:15px">' +
+      '<span class="ci">฿</span><div>คงเหลือใช้ได้ <b>' + Fmt.money(s.availableToSpend) + ' บาท</b><br>' +
+      '<span class="dim">จำนวนที่ใช้ได้ ' + Fmt.money(s.usableAmount) + ' – จองค้าง ' +
+      Fmt.money(s.reservedOutstanding) + ' – เบิกแล้ว ' + Fmt.money(s.disbursed) + '</span></div></div>';
+  }
+  const box = el('reserveRefBox');
+  if (type !== 'DISBURSE') { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="field"><label>อ้างอิงรายการจอง</label><div class="skel" style="height:38px"></div></div>';
+  api('txn.openReserves', { budgetId: bid }).then(function (list) {
+    const pre = Forms._prefillReserveId || '';
+    box.innerHTML = F.select('fReserveId', 'เบิกจากรายการจอง',
+      [['', 'ไม่อ้างอิงการจอง (เบิกจากวงเงินคงเหลือโดยตรง)']].concat(list.map(function (r) {
+        return [r.txnId, r.txnNo + ' · ' + r.title + ' · คงค้าง ' + Fmt.money(r.outstanding)];
+      })), pre, {
+        hint: list.length
+          ? 'เลือกรายการจองเพื่อตัดยอดจอง — จะไม่นับวงเงินซ้ำ'
+          : 'ไม่มีรายการจองคงค้างในงบนี้'
+      });
+    Forms._prefillReserveId = '';
+  }).catch(function () { box.innerHTML = ''; });
+};
+
+Forms.submitTxn = function () {
+  const payload = {
+    budgetId: F.val('fBudgetId'), txnType: F.val('fTxnType'), amount: F.num('fAmount'),
+    txnDate: F.val('fDate'), title: F.val('fTitle'), category: F.val('fCategory'),
+    vendor: F.val('fVendor'), txnNo: F.val('fTxnNo'), description: F.val('fDesc'),
+    reserveTxnId: F.val('fReserveId'), reason: 'บันทึกรายการใหม่', files: Upload.files
+  };
+  if (!payload.amount || payload.amount <= 0) return UI.err('กรุณาระบุจำนวนเงินมากกว่า 0');
+  if (!payload.title) return UI.err('กรุณาระบุชื่อ/รายละเอียดรายการ');
+  F.submitting(true);
+  api('txn.create', payload).then(function (r) {
+    UI.closeDrawer();
+    UI.ok('บันทึกรายการเรียบร้อย', 'เลขที่ ' + r.txnNo);
+    State.detailCache = {};
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'บันทึกรายการ'); UI.err('บันทึกไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── รายการใช้งบ: แก้ไข / ยกเลิก ───────────── */
+Forms.txnEdit = function (txnId) {
+  const t = Views._findTxn(txnId);
+  if (!t) return UI.err('ไม่พบข้อมูลรายการ', 'กรุณารีเฟรชหน้าจอ');
+  const b = App.budget(t.budgetId);
+
+  UI.openDrawer({
+    title: 'แก้ไขรายการ ' + t.txnNo,
+    subtitle: (b ? b.code + ' – ' + b.name + ' · ' : '') + t.txnTypeLabel,
+    body:
+      '<div class="callout warn" style="margin-bottom:16px"><span class="ci">!</span><div>' +
+      'การแก้ไขต้องระบุเหตุผล ระบบจะเก็บค่าก่อน–หลังไว้ใน Audit Log และแนบไฟล์ประกอบได้</div></div>' +
+      '<div class="field-row">' +
+      F.money('fAmount', 'จำนวนเงิน (บาท)', { required: true, value: t.amount,
+        hint: t.txnType === 'RESERVE' && t.settledAmount > 0
+          ? 'ถูกเบิกไปแล้ว ' + Fmt.money(t.settledAmount) + ' บาท — ยอดใหม่ต้องไม่ต่ำกว่านี้' : '' }) +
+      F.text('fDate', 'วันที่รายการ', { type: 'date', value: t.txnDate }) +
+      '</div>' +
+      F.text('fTitle', 'ชื่อ/รายละเอียดรายการ', { required: true, value: t.title }) +
+      '<div class="field-row">' +
+      F.text('fCategory', 'หมวด', { value: t.category }) +
+      F.text('fVendor', 'คู่ค้า / ผู้รับเงิน', { value: t.vendor }) +
+      '</div>' +
+      F.text('fTxnNo', 'เลขที่รายการ', { value: t.txnNo }) +
+      F.area('fDesc', 'หมายเหตุ', { value: t.description }) +
+      F.area('fReason', 'เหตุผลการแก้ไข', { required: true, placeholder: 'เช่น แก้ยอดตามใบเสร็จจริง / แก้ชื่อผู้รับเงิน' }) +
+      (t.attachments.length ? '<div class="field"><label>ไฟล์แนบเดิม</label><div>' + C.attachments(t.attachments) + '</div></div>' : '') +
+      Upload.widget('แนบไฟล์เพิ่ม (เอกสารประกอบการแก้ไข)'),
+    footer: F.footer('บันทึกการแก้ไข', 'Forms.submitTxnEdit(\'' + attr(txnId) + '\')'),
+    onMount: Upload.mount
+  });
+};
+
+Forms.submitTxnEdit = function (txnId) {
+  const payload = {
+    txnId: txnId, amount: F.num('fAmount'), txnDate: F.val('fDate'), title: F.val('fTitle'),
+    category: F.val('fCategory'), vendor: F.val('fVendor'), txnNo: F.val('fTxnNo'),
+    description: F.val('fDesc'), reason: F.val('fReason'), files: Upload.files
+  };
+  if (String(payload.reason).length < 5) return UI.err('กรุณาระบุเหตุผลการแก้ไข (อย่างน้อย 5 ตัวอักษร)');
+  F.submitting(true);
+  api('txn.update', payload).then(function () {
+    UI.closeDrawer(); UI.ok('บันทึกการแก้ไขแล้ว');
+    State.detailCache = {};
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'บันทึกการแก้ไข'); UI.err('แก้ไขไม่สำเร็จ', e.message); });
+};
+
+Forms.txnCancel = function (txnId) {
+  const t = Views._findTxn(txnId);
+  UI.openDrawer({
+    title: 'ยกเลิกรายการ ' + (t ? t.txnNo : ''),
+    subtitle: t ? t.txnTypeLabel + ' · ' + Fmt.money(t.amount) + ' บาท' : '',
+    body:
+      '<div class="callout danger" style="margin-bottom:16px"><span class="ci">!</span><div>' +
+      'ระบบจะไม่ลบข้อมูล แต่เปลี่ยนสถานะเป็น "ยกเลิก" และคืนวงเงินให้งบประมาณ ' +
+      'พร้อมบันทึกเหตุผลไว้ถาวร</div></div>' +
+      F.area('fReason', 'เหตุผลการยกเลิก', { required: true, placeholder: 'เช่น ยกเลิกการจัดซื้อ / บันทึกผิดงบ' }) +
+      Upload.widget('เอกสารประกอบการยกเลิก (ถ้ามี)'),
+    footer: F.footer('ยืนยันการยกเลิก', 'Forms.submitTxnCancel(\'' + attr(txnId) + '\')', { danger: true }),
+    onMount: Upload.mount
+  });
+};
+
+Forms.submitTxnCancel = function (txnId) {
+  const reason = F.val('fReason');
+  if (String(reason).length < 5) return UI.err('กรุณาระบุเหตุผลการยกเลิก (อย่างน้อย 5 ตัวอักษร)');
+  F.submitting(true);
+  api('txn.cancel', { txnId: txnId, reason: reason, files: Upload.files }).then(function () {
+    UI.closeDrawer(); UI.ok('ยกเลิกรายการแล้ว', 'วงเงินถูกคืนเข้างบประมาณ');
+    State.detailCache = {};
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'ยืนยันการยกเลิก'); UI.err('ยกเลิกไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── ย้ายรายการทั้งชุด (ผู้ดูแลระบบ) ───────────── */
+Forms.txnMove = function (txnId) {
+  if (!State.user.isSuperAdmin) return UI.err('เฉพาะผู้ดูแลระบบเท่านั้น');
+  const t = Views._findTxn(txnId);
+  if (!t) return UI.err('ไม่พบรายการ');
+  const others = State.budgets.filter(function (b) { return b.budgetId !== t.budgetId && b.status !== 'CLOSED'; });
+  if (!others.length) return UI.err('ไม่มีงบปลายทางที่เปิดอยู่');
+
+  UI.openDrawer({
+    title: 'ย้ายรายการไปงบอื่น',
+    subtitle: t.txnNo + ' · ' + t.txnTypeLabel + ' · ' + Fmt.money(t.amount) + ' บาท',
+    body:
+      '<div class="callout warn" style="margin-bottom:16px"><span class="ci">!</span><div>' +
+      'จะย้ายทั้งชุด: รายการจองและทุกรายการเบิกที่ผูกกัน · ตรวจวงเงินคงเหลือของงบปลายทางก่อน</div></div>' +
+      F.select('fToBudget', 'งบปลายทาง', others.map(function (b) {
+        return [b.budgetId, b.code + ' – ' + b.name];
+      }), others[0].budgetId, { required: true }) +
+      F.area('fReason', 'เหตุผลการย้าย', { required: true, placeholder: 'เช่น บันทึกผิดโครงการ / โอนภาระงาน' }),
+    footer: F.footer('ยืนยันการย้าย', 'Forms.submitTxnMove(\'' + attr(txnId) + '\')')
+  });
+};
+
+Forms.submitTxnMove = function (txnId) {
+  const payload = { txnId: txnId, toBudgetId: F.val('fToBudget'), reason: F.val('fReason') };
+  if (String(payload.reason).length < 5) return UI.err('กรุณาระบุเหตุผลการย้าย');
+  F.submitting(true);
+  api('txn.move', payload).then(function (r) {
+    UI.closeDrawer();
+    UI.ok('ย้ายรายการแล้ว', r.movedTxnIds.length + ' รายการ · ผลกระทบวงเงิน ' + Fmt.money(r.impact));
+    State.detailCache = {};
+    App.reload();
+  }).catch(function (e) { F.submitting(false, 'ยืนยันการย้าย'); UI.err('ย้ายไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── สิทธิ์ผู้ดูแล / ผู้ดู ───────────── */
+Forms.perm = function (budgetId, email, role) {
+  const b = App.budget(budgetId);
+  UI.openDrawer({
+    title: email ? 'เปลี่ยนสิทธิ์ผู้ใช้' : 'ให้สิทธิ์เข้าถึงงบประมาณ',
+    subtitle: b ? b.code + ' – ' + b.name : '',
+    body:
+      F.text('fEmail', 'อีเมล Google ของผู้ใช้', { required: true, type: 'email', value: email || '',
+        placeholder: 'name@yourdomain.com' }) +
+      F.select('fRole', 'ระดับสิทธิ์', [
+        ['VIEWER', 'ผู้ดู – ดูยอดและรายการได้เท่านั้น'],
+        ['TXN_MANAGER', 'ผู้จัดการรายการ – บันทึก/แก้ไขจอง–เบิก'],
+        ['OWNER', 'ผู้รับผิดชอบ – ปรับวงเงิน + รายการ + แก้ข้อมูลงบ']
+      ], role || 'VIEWER', { required: true }) +
+      F.text('fNote', 'หมายเหตุ', { placeholder: 'เช่น หัวหน้าฝ่าย / ผู้ปฏิบัติงาน' }) +
+      '<div class="callout"><span class="ci">ℹ</span><div>แนะนำให้กำหนดสิทธิ์ผ่านฟอร์มแก้ไขงบ (เลือกจากรายชื่อผู้ใช้) จะสะดวกกว่า</div></div>',
+    footer: F.footer(email ? 'บันทึกสิทธิ์' : 'ให้สิทธิ์', 'Forms.submitPerm(\'' + attr(budgetId) + '\')'),
+    onMount: function () { if (email) el('fEmail').disabled = true; }
+  });
+};
+
+Forms.submitPerm = function (budgetId) {
+  const payload = {
+    budgetId: budgetId, email: F.val('fEmail'), role: F.val('fRole'), note: F.val('fNote')
+  };
+  if (!payload.email || payload.email.indexOf('@') < 0) return UI.err('กรุณาระบุอีเมลให้ถูกต้อง');
+  F.submitting(true);
+  api('perm.grant', payload).then(function () {
+    UI.closeDrawer(); UI.ok('บันทึกสิทธิ์เรียบร้อย', payload.email);
+    State.detailCache = {};
+    Router.render();
+  }).catch(function (e) { F.submitting(false, 'ให้สิทธิ์'); UI.err('บันทึกไม่สำเร็จ', e.message); });
+};
+
+Forms.permRevoke = function (permissionId, email) {
+  UI.openDrawer({
+    title: 'เพิกถอนสิทธิ์',
+    subtitle: email,
+    body: '<div class="callout danger" style="margin-bottom:16px"><span class="ci">!</span><div>' +
+      'ผู้ใช้จะไม่เห็นงบประมาณนี้อีก (ประวัติการทำรายการยังคงอยู่)</div></div>' +
+      F.area('fReason', 'เหตุผลการเพิกถอน', { required: true, placeholder: 'เช่น ย้ายหน่วยงาน / สิ้นสุดวาระ' }),
+    footer: F.footer('ยืนยันเพิกถอน', 'Forms.submitPermRevoke(\'' + attr(permissionId) + '\')', { danger: true })
+  });
+};
+
+Forms.submitPermRevoke = function (permissionId) {
+  const reason = F.val('fReason');
+  if (String(reason).length < 3) return UI.err('กรุณาระบุเหตุผล');
+  F.submitting(true);
+  api('perm.revoke', { permissionId: permissionId, reason: reason }).then(function () {
+    UI.closeDrawer(); UI.ok('เพิกถอนสิทธิ์แล้ว');
+    State.detailCache = {};
+    Router.render();
+  }).catch(function (e) { F.submitting(false, 'ยืนยันเพิกถอน'); UI.err('ไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── ผู้ใช้ระบบ ───────────── */
+Forms.user = function (email, existing) {
+  UI.openDrawer({
+    title: email ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้',
+    subtitle: email || 'ผู้ใช้ระดับระบบ — สิทธิ์รายงบกำหนดที่หน้าแก้ไขงบ',
+    body:
+      F.text('fEmail', 'อีเมล Google', { required: true, type: 'email', value: email || '' }) +
+      F.text('fName', 'ชื่อที่แสดง', { placeholder: 'ชื่อ-นามสกุล', value: existing ? existing.displayName : '' }) +
+      F.select('fSysRole', 'สิทธิ์ระดับระบบ', [
+        ['USER', 'ผู้ใช้งาน – เห็นเฉพาะงบที่ถูกกำหนด'],
+        ['EXECUTIVE', 'ผู้บริหาร – ดูทุกโครงการ + ภาพรวม (อ่านอย่างเดียว)'],
+        ['SUPER_ADMIN', 'ผู้ดูแลระบบ – ทำได้ทุกอย่าง']
+      ], existing ? existing.systemRole : 'USER') +
+      F.select('fStatus', 'สถานะ', [['ACTIVE', 'ใช้งาน'], ['INACTIVE', 'ระงับการใช้งาน']],
+        existing ? existing.status : 'ACTIVE') +
+      F.text('fNote', 'หมายเหตุ', { placeholder: 'ตำแหน่ง / หน่วยงาน', value: existing ? existing.note : '' }),
+    footer: F.footer('บันทึก', 'Forms.submitUser()')
+  });
+};
+
+Forms.submitUser = function () {
+  const payload = {
+    email: F.val('fEmail'), displayName: F.val('fName'), systemRole: F.val('fSysRole'),
+    status: F.val('fStatus'), note: F.val('fNote')
+  };
+  if (!payload.email || payload.email.indexOf('@') < 0) return UI.err('กรุณาระบุอีเมลให้ถูกต้อง');
+  F.submitting(true);
+  api('user.upsert', payload).then(function () {
+    UI.closeDrawer(); UI.ok('บันทึกผู้ใช้เรียบร้อย');
+    Views.adminUsers();
+  }).catch(function (e) { F.submitting(false, 'บันทึก'); UI.err('บันทึกไม่สำเร็จ', e.message); });
+};
+
+/* ───────────── ประเภทงบประมาณ (ทะเบียน A–Z) ───────────── */
+Forms.type = function (existing) {
+  const t = existing || null;
+  const isNew = !t;
+  UI.openDrawer({
+    title: isNew ? 'เพิ่มประเภทงบประมาณ' : 'แก้ไขประเภท ' + t.code,
+    subtitle: 'รหัส A–Z ตัวเดียว · ใช้เป็นตัวเลือกตอนสร้างงบและตัวกรองภาพรวม',
+    body:
+      (isNew
+        ? F.text('fCode', 'รหัสประเภท', {
+            required: true, value: '', placeholder: 'เช่น E',
+            tip: 'ตัวอักษร A–Z ตัวเดียว ห้ามซ้ำกับที่มีอยู่'
+          })
+        : '<div class="field"><label>รหัสประเภท</label><div class="nav-bcode" style="display:inline-block;margin-top:4px">' +
+          esc(t.code) + '</div><input type="hidden" id="fCode" value="' + attr(t.code) + '"></div>') +
+      F.text('fName', 'ชื่อประเภท', {
+        required: true, value: t ? t.name : '', placeholder: 'เช่น พัฒนาระบบ / ดิจิทัล'
+      }) +
+      F.area('fDesc', 'คำอธิบาย', {
+        value: t ? (t.description || '') : '', placeholder: 'ขอบเขตของประเภทนี้ (ถ้ามี)'
+      }) +
+      F.select('fStatus', 'สถานะ',
+        [['ACTIVE', 'ใช้งาน'], ['INACTIVE', 'ระงับ']],
+        t ? t.status : 'ACTIVE',
+        { tip: 'ระงับแล้วจะไม่โชว์ในฟอร์มสร้างงบ แต่โครงการเดิมยังคงรหัสเดิม' }) +
+      F.area('fReason', 'เหตุผล (บันทึก Audit)', {
+        required: true, placeholder: 'เช่น เพิ่มประเภทตามโครงสร้างงบใหม่'
+      }),
+    footer: F.footer(isNew ? 'เพิ่มประเภท' : 'บันทึก', 'Forms.submitType()')
+  });
+};
+
+Forms.submitType = function () {
+  const payload = {
+    code: F.val('fCode'),
+    name: F.val('fName'),
+    description: F.val('fDesc'),
+    status: F.val('fStatus'),
+    reason: F.val('fReason')
+  };
+  if (!/^[A-Za-z]$/.test(payload.code || '')) return UI.err('รหัสประเภทต้องเป็นตัวอักษร A–Z ตัวเดียว');
+  if (!payload.name) return UI.err('กรุณาระบุชื่อประเภท');
+  if (String(payload.reason || '').length < 3) return UI.err('กรุณาระบุเหตุผล');
+  F.submitting(true);
+  api('type.upsert', payload).then(function (r) {
+    UI.closeDrawer();
+    UI.ok(r.mode === 'create' ? 'เพิ่มประเภทแล้ว' : 'บันทึกประเภทแล้ว', payload.code + ' – ' + payload.name);
+    return App.reload().then(function () { Views.adminTypes(); });
+  }).catch(function (e) {
+    F.submitting(false, 'บันทึก');
+    UI.err('บันทึกไม่สำเร็จ', e.message);
+  });
+};
+
+</script>

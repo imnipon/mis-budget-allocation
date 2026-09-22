@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= appName ?></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <?!= include('Styles'); ?>
+  <?!= include('LogoData'); ?>
+</head>
+<body>
+
+<!-- ─── หน้าจอโหลด ─── -->
+<div id="splash" class="splash">
+  <div class="splash-card">
+    <div class="splash-logo"><img class="app-logo" alt="KU" width="62" height="62"></div>
+    <div class="splash-title"><?= appName ?></div>
+    <div class="splash-bar"><span></span></div>
+    <div class="splash-note" id="splashNote">กำลังเชื่อมต่อ Google Sheets…</div>
+  </div>
+</div>
+
+<!-- ─── โครงหลัก ─── -->
+<div id="shell" class="shell hidden">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo"><img class="app-logo" alt="KU" width="38" height="38"></div>
+      <div class="brand-text">
+        <strong id="brandName"><?= appName ?></strong>
+        <small id="brandOrg"></small>
+      </div>
+      <button class="icon-btn sidebar-close" onclick="UI.toggleSidebar(false)" aria-label="ปิดเมนู">✕</button>
+    </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-fixed">
+        <div class="nav-group-label">ส่วนดูข้อมูล</div>
+        <a class="nav-item overview-only" target="_self" href="#/dashboard" data-route="#/dashboard"><span class="ni">◉</span>ภาพรวมงบประมาณ</a>
+        <a class="nav-item" target="_self" href="#/transactions" data-route="#/transactions"><span class="ni">☰</span>รายการใช้งบ</a>
+        <a class="nav-item audit-only" target="_self" href="#/audit" data-route="#/audit"><span class="ni">⟲</span>ประวัติการเปลี่ยนแปลง</a>
+      </div>
+
+      <div class="nav-budgets-section">
+        <div class="nav-group-label">งบประมาณ <span class="nav-count" id="navBudgetCount"></span></div>
+        <div id="navBudgets" class="nav-budgets" role="navigation" aria-label="งบประมาณที่เข้าถึงได้"></div>
+      </div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="admin-menu-wrap" id="adminMenuWrap">
+        <button type="button" class="user-chip user-chip-btn" id="adminMenuBtn"
+          aria-haspopup="menu" aria-expanded="false" aria-controls="adminMenu"
+          onclick="App.toggleAdminMenu(event)">
+          <div class="avatar" id="userAvatar">?</div>
+          <div class="user-meta">
+            <strong id="userName">—</strong>
+            <small id="userRole">—</small>
+          </div>
+          <span class="admin-caret admin-only hidden" id="adminCaret" aria-hidden="true">▴</span>
+        </button>
+        <div class="admin-menu hidden" id="adminMenu" role="menu" aria-label="สำหรับผู้ดูแลระบบ">
+          <div class="admin-menu-title">สำหรับผู้ดูแลระบบ</div>
+          <a class="admin-menu-item admin-only" role="menuitem" target="_self" href="#/admin/budgets" data-route="#/admin/budgets"
+            onclick="App.closeAdminMenu()"><span class="ni">⚙</span>จัดการงบประมาณ</a>
+          <a class="admin-menu-item super-only" role="menuitem" target="_self" href="#/admin/types" data-route="#/admin/types"
+            onclick="App.closeAdminMenu()"><span class="ni">▤</span>จัดการประเภท</a>
+          <a class="admin-menu-item super-only" role="menuitem" target="_self" href="#/admin/users" data-route="#/admin/users"
+            onclick="App.closeAdminMenu()"><span class="ni">☺</span>ผู้ใช้และสิทธิ์</a>
+        </div>
+      </div>
+      <div class="version">เวอร์ชัน <?= version ?></div>
+    </div>
+  </aside>
+
+  <div class="sidebar-backdrop" onclick="UI.toggleSidebar(false)"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" onclick="UI.toggleSidebar(true)" aria-label="เมนู">☰</button>
+      <div class="crumbs" id="crumbs"></div>
+      <div class="topbar-actions">
+        <button class="btn btn-ghost" onclick="App.openManual()" title="คู่มือผู้ใช้">คู่มือผู้ใช้</button>
+        <button class="btn btn-ghost" onclick="App.reload()" title="โหลดข้อมูลใหม่">⟳ รีเฟรช</button>
+        <button class="btn btn-ghost" onclick="UI.toggleTheme()" id="themeBtn" title="สลับโหมดสี">◐</button>
+      </div>
+    </header>
+
+    <div id="view" class="view"></div>
+
+    <footer class="foot">
+      ข้อมูลทั้งหมดจัดเก็บใน Google Sheets · ทุกการเปลี่ยนแปลงถูกบันทึกใน AuditLog
+    </footer>
+  </main>
+</div>
+
+<!-- ─── Drawer สำหรับฟอร์ม ─── -->
+<div class="drawer-wrap hidden" id="drawerWrap">
+  <div class="drawer-backdrop" onclick="UI.closeDrawer()"></div>
+  <section class="drawer" role="dialog" aria-modal="true">
+    <header class="drawer-head">
+      <div>
+        <h3 id="drawerTitle">—</h3>
+        <p id="drawerSub" class="muted"></p>
+      </div>
+      <button class="icon-btn" onclick="UI.closeDrawer()" aria-label="ปิด">✕</button>
+    </header>
+    <div class="drawer-body" id="drawerBody"></div>
+    <footer class="drawer-foot" id="drawerFoot"></footer>
+  </section>
+</div>
+
+<!-- ─── Modal แสดงรายละเอียด ─── -->
+<div class="modal-wrap hidden" id="modalWrap">
+  <div class="modal-backdrop" onclick="UI.closeModal()"></div>
+  <section class="modal" role="dialog" aria-modal="true">
+    <header class="modal-head">
+      <h3 id="modalTitle">—</h3>
+      <button class="icon-btn" onclick="UI.closeModal()" aria-label="ปิด">✕</button>
+    </header>
+    <div class="modal-body" id="modalBody"></div>
+  </section>
+</div>
+
+
+<!-- ─── คู่มือผู้ใช้ ─── -->
+<div class="manual-overlay hidden" id="manualOverlay" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+  <div class="manual-toolbar no-print">
+    <div class="manual-toolbar-left">
+      <strong id="manualTitle">คู่มือผู้ใช้</strong>
+      <span class="muted">พร้อมพิมพ์ขนาด A4</span>
+    </div>
+    <div class="manual-toolbar-right">
+      <button type="button" class="btn btn-primary" onclick="App.printManual()">พิมพ์คู่มือ</button>
+      <button type="button" class="btn btn-outline" onclick="App.closeManual()">ปิด</button>
+    </div>
+  </div>
+  <div class="manual-scroll" id="manualScroll">
+    <?!= include('Manual'); ?>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+
+<script>
+(function () {
+  function applyLogos() {
+    var src = window.APP_LOGO_SRC;
+    if (!src) return;
+    document.querySelectorAll('img.app-logo').forEach(function (img) {
+      if (!img.getAttribute('src')) img.setAttribute('src', src);
+    });
+  }
+  applyLogos();
+  document.addEventListener('DOMContentLoaded', applyLogos);
+})();
+</script>
+<?!= include('JsCore'); ?>
+<?!= include('JsViews'); ?>
+<?!= include('JsForms'); ?>
+</body>
+</html>

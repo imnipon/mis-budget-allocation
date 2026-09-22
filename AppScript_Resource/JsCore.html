@@ -1,0 +1,541 @@
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   JsCore — state, rpc client, utilities, UI primitives, router
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.State = {
+  user: null,
+  app: {},
+  labels: {},
+  enums: {},
+  budgets: [],
+  categories: [],
+  budgetTypes: [],
+  recent: [],
+  detailCache: {},   // budgetId -> detail
+  route: '',
+  loading: false
+};
+
+/* ───────── rpc ───────── */
+function api(action, payload) {
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res) return reject(new Error('ไม่มีการตอบกลับจากเซิร์ฟเวอร์'));
+        if (res.ok) resolve(res.data);
+        else reject(new Error(res.error || 'เกิดข้อผิดพลาดไม่ทราบสาเหตุ'));
+      })
+      .withFailureHandler(function (err) {
+        reject(new Error((err && err.message) ? err.message : 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'));
+      })
+      .rpc(action, payload || {});
+  });
+}
+
+/* ───────── formatting ───────── */
+window.Fmt = {
+  money: function (n, decimals) {
+    const v = Number(n || 0);
+    return v.toLocaleString('en-US', {
+      minimumFractionDigits: decimals === undefined ? 2 : decimals,
+      maximumFractionDigits: decimals === undefined ? 2 : decimals
+    });
+  },
+  /** ย่อหลักหน่วย: 1,250,000 → 1.25 ล้าน */
+  compact: function (n) {
+    const v = Number(n || 0);
+    const a = Math.abs(v);
+    if (a >= 1e6) return (v / 1e6).toFixed(2).replace(/\.00$/, '') + ' ล้าน';
+    if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    return Fmt.money(v, 0);
+  },
+  pct: function (n) { return (Number(n || 0)).toFixed(1) + '%'; },
+  date: function (s) {
+    if (!s) return '—';
+    const d = String(s).substring(0, 10).split('-');
+    if (d.length !== 3) return String(s);
+    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    return Number(d[2]) + ' ' + months[Number(d[1]) - 1] + ' ' + (Number(d[0]) + 543);
+  },
+  dateTime: function (s) {
+    if (!s) return '—';
+    const str = String(s);
+    const time = str.length >= 16 ? str.substring(11, 16) : '';
+    return Fmt.date(str) + (time ? ' · ' + time : '');
+  },
+  month: function (ym) {
+    if (!ym || ym.indexOf('-') < 0) return ym || '—';
+    const p = ym.split('-');
+    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    return months[Number(p[1]) - 1] + ' ' + String(Number(p[0]) + 543).slice(-2);
+  },
+  size: function (b) {
+    const n = Number(b || 0);
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  },
+  initials: function (s) {
+    const t = String(s || '?').replace(/@.*/, '');
+    return t.substring(0, 2).toUpperCase();
+  }
+};
+
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function attr(s) { return esc(s).replace(/\n/g, ' '); }
+function el(id) { return document.getElementById(id); }
+function qs(s, root) { return (root || document).querySelector(s); }
+function qsa(s, root) { return Array.prototype.slice.call((root || document).querySelectorAll(s)); }
+
+/* ───────── UI primitives ───────── */
+window.UI = {
+  toast: function (title, message, kind) {
+    const wrap = el('toasts');
+    const div = document.createElement('div');
+    div.className = 'toast ' + (kind || '');
+    div.innerHTML = '<div><strong>' + esc(title) + '</strong>' +
+      (message ? '<p>' + esc(message) + '</p>' : '') + '</div>';
+    wrap.appendChild(div);
+    setTimeout(function () {
+      div.style.transition = '.25s'; div.style.opacity = '0'; div.style.transform = 'translateX(24px)';
+      setTimeout(function () { div.remove(); }, 260);
+    }, kind === 'err' ? 8000 : 4200);
+  },
+  ok: function (t, m) { UI.toast(t, m, 'ok'); },
+  err: function (t, m) { UI.toast(t, m, 'err'); },
+
+  openDrawer: function (opts) {
+    el('drawerTitle').textContent = opts.title || '';
+    el('drawerSub').textContent = opts.subtitle || '';
+    el('drawerBody').innerHTML = opts.body || '';
+    el('drawerFoot').innerHTML = opts.footer || '';
+    el('drawerWrap').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    if (opts.onMount) opts.onMount();
+    const first = qs('.drawer-body input,.drawer-body select,.drawer-body textarea');
+    if (first) setTimeout(function () { first.focus(); }, 120);
+  },
+  closeDrawer: function () {
+    el('drawerWrap').classList.add('hidden');
+    el('drawerBody').innerHTML = '';
+    document.body.style.overflow = '';
+    Upload.reset();
+  },
+  openModal: function (title, body) {
+    el('modalTitle').textContent = title;
+    el('modalBody').innerHTML = body;
+    el('modalWrap').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  },
+  closeModal: function () {
+    el('modalWrap').classList.add('hidden');
+    el('modalBody').innerHTML = '';
+    if (el('drawerWrap').classList.contains('hidden')) document.body.style.overflow = '';
+  },
+  toggleSidebar: function (open) {
+    document.body.classList.toggle('nav-open', !!open);
+  },
+  toggleTheme: function () {
+    const now = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', now);
+    try { localStorage.setItem('ba_theme', now); } catch (e) {}
+    el('themeBtn').textContent = now === 'dark' ? '☀' : '◐';
+    if (State.route) Router.render();
+  },
+  crumbs: function (parts) {
+    el('crumbs').innerHTML = parts.map(function (p, i) {
+      return (i ? '<span class="sep">/</span>' : '') + (i === parts.length - 1 ? '<b>' + esc(p) + '</b>' : esc(p));
+    }).join(' ');
+  },
+  busy: function (target, on) {
+    const node = typeof target === 'string' ? el(target) : target;
+    if (!node) return;
+    if (on) {
+      node.innerHTML = '<div class="card"><div class="card-body stack">' +
+        '<div class="skel" style="width:35%"></div><div class="skel" style="width:70%"></div>' +
+        '<div class="skel" style="width:55%"></div><div class="skel" style="width:80%"></div></div></div>';
+    }
+  },
+  confirm: function (opts) {
+    return new Promise(function (resolve) {
+      const id = 'cf' + Date.now();
+      UI.openModal(opts.title || 'ยืนยันการทำงาน',
+        '<p style="margin:0 0 18px">' + esc(opts.message || '') + '</p>' +
+        '<div class="row" style="justify-content:flex-end">' +
+        '<button class="btn btn-outline" id="' + id + 'n">ยกเลิก</button>' +
+        '<button class="btn ' + (opts.danger ? 'btn-danger' : 'btn-primary') + '" id="' + id + 'y">' +
+        esc(opts.confirmText || 'ยืนยัน') + '</button></div>');
+      el(id + 'n').onclick = function () { UI.closeModal(); resolve(false); };
+      el(id + 'y').onclick = function () { UI.closeModal(); resolve(true); };
+    });
+  }
+};
+
+/* ───────── helper: components ───────── */
+window.C = {
+  kpi: function (o) {
+    return '<div class="kpi ' + (o.tone || '') + '">' +
+      '<div class="kpi-label">' + esc(o.label) + '</div>' +
+      '<div class="kpi-value num">' + o.value + (o.unit ? '<small>' + esc(o.unit) + '</small>' : '') + '</div>' +
+      (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') + '</div>';
+  },
+  empty: function (title, text, ico) {
+    return '<div class="empty"><div class="empty-ico">' + (ico || '◌') + '</div>' +
+      '<h4>' + esc(title) + '</h4>' + (text ? '<p>' + esc(text) + '</p>' : '') + '</div>';
+  },
+  /** แถบสัดส่วน จอง / เบิก เทียบกับจำนวนที่ใช้ได้ */
+  usageBar: function (s) {
+    const base = Math.max(s.usableAmount, 1);
+    const dis = Math.min(s.disbursed / base * 100, 100);
+    const res = Math.min(s.reservedOutstanding / base * 100, Math.max(100 - dis, 0));
+    return '<div class="bar">' +
+      '<span class="seg-dis" style="width:' + dis.toFixed(2) + '%"></span>' +
+      '<span class="seg-res" style="width:' + res.toFixed(2) + '%"></span></div>' +
+      '<div class="bar-legend">' +
+      '<span><i style="background:#4f46e5"></i>เบิกแล้ว ' + Fmt.money(s.disbursed) + '</span>' +
+      '<span><i style="background:#f59e0b"></i>จองค้าง ' + Fmt.money(s.reservedOutstanding) + '</span>' +
+      '<span><i style="background:var(--surface-3)"></i>ใช้ได้อีก ' + Fmt.money(s.availableToSpend) + '</span>' +
+      '</div>';
+  },
+  tip: function (text) {
+    return '<span class="tip" tabindex="0" data-tip="' + attr(text) + '">i</span>';
+  },
+  statusTone: function (status) {
+    if (status === 'NEW') return 'st-new';
+    if (status === 'CLOSED') return 'st-closed';
+    return 'st-process'; // PROCESS / ACTIVE
+  },
+  statusPill: function (status) {
+    const map = {
+      NEW: ['pill-new', 'New'], PROCESS: ['pill-process', 'Process'], ACTIVE: ['pill-process', 'Process'],
+      CLOSED: ['pill-closed', 'Close'],
+      SETTLED: ['pill-sky', 'เบิกครบแล้ว'], CANCELLED: ['pill-rose', 'ยกเลิก'],
+      REVOKED: ['pill-rose', 'เพิกถอน'], INACTIVE: ['pill', 'ระงับ']
+    };
+    const m = map[status] || ['pill', status];
+    return '<span class="pill ' + m[0] + ' pill-dot">' + esc(m[1]) + '</span>';
+  },
+  rolePill: function (role) {
+    const map = {
+      SUPER_ADMIN: ['pill-primary', 'ผู้ดูแลระบบ'], EXECUTIVE: ['pill-sky', 'ผู้บริหาร'],
+      OWNER: ['pill-primary', 'ผู้รับผิดชอบ'], ADMIN: ['pill-primary', 'ผู้รับผิดชอบ'],
+      TXN_MANAGER: ['pill-amber', 'ผู้จัดการรายการ'],
+      VIEWER: ['pill-sky', 'ผู้ดู'], USER: ['pill', 'ผู้ใช้งาน'], NONE: ['pill', 'ไม่มีสิทธิ์']
+    };
+    const m = map[role] || ['pill', role];
+    return '<span class="pill ' + m[0] + '">' + esc(m[1]) + '</span>';
+  },
+  sysRolePill: function (systemRole) {
+    if (systemRole === 'SUPER_ADMIN') return '<span class="pill pill-primary">ผู้ดูแลระบบ</span>';
+    if (systemRole === 'EXECUTIVE') return '<span class="pill pill-sky">ผู้บริหาร</span>';
+    return '<span class="pill">ผู้ใช้งาน</span>';
+  },
+  typePill: function (t) {
+    return t === 'RESERVE'
+      ? '<span class="pill pill-amber">◷ การจอง</span>'
+      : '<span class="pill pill-primary">✓ เบิกใช้แล้ว</span>';
+  },
+  attachments: function (list) {
+    if (!list || !list.length) return '<span class="dim" style="font-size:12px">—</span>';
+    return list.map(function (a) {
+      return '<span class="attach-link" onclick="App.download(\'' + attr(a.attachmentId) + '\')" title="' +
+        attr(a.fileName) + ' · ' + Fmt.size(a.sizeBytes) + '">📎 <span>' + esc(a.fileName) + '</span></span>';
+    }).join('');
+  },
+  donut: function (segments, centerValue, centerLabel) {
+    const total = segments.reduce(function (s, x) { return s + Math.max(Number(x.value) || 0, 0); }, 0);
+    const r = 58, cx = 75, cy = 75, circ = 2 * Math.PI * r;
+    let offset = 0;
+    const arcs = segments.map(function (s) {
+      const frac = total > 0 ? Math.max(Number(s.value) || 0, 0) / total : 0;
+      const len = frac * circ;
+      const dash = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + s.color +
+        '" stroke-width="17" stroke-linecap="butt" stroke-dasharray="' + len.toFixed(2) + ' ' +
+        (circ - len).toFixed(2) + '" stroke-dashoffset="' + (-offset).toFixed(2) + '"></circle>';
+      offset += len;
+      return dash;
+    }).join('');
+    return '<div class="donut-wrap"><div class="donut"><svg width="150" height="150" viewBox="0 0 150 150">' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--surface-3)" stroke-width="17"></circle>' +
+      arcs + '</svg><div class="donut-center"><b class="num">' + centerValue + '</b><small>' + esc(centerLabel) + '</small></div></div>' +
+      '<div class="legend">' + segments.map(function (s) {
+        return '<div class="legend-row"><i style="background:' + s.color + '"></i>' + esc(s.label) +
+          '<span class="lv num">' + Fmt.money(s.value, 0) + '</span></div>';
+      }).join('') + '</div></div>';
+  },
+  monthlyChart: function (monthly) {
+    if (!monthly || !monthly.length) return C.empty('ยังไม่มีข้อมูลรายเดือน', 'ข้อมูลจะแสดงเมื่อมีรายการใช้งบ');
+    const max = Math.max.apply(null, monthly.map(function (m) { return m.reserve + m.disburse; })) || 1;
+    return '<div class="chart-bars">' + monthly.slice(-12).map(function (m) {
+      const hr = m.reserve / max * 100, hd = m.disburse / max * 100;
+      return '<div class="cbar" title="' + attr(Fmt.month(m.month)) + ' — จอง ' + Fmt.money(m.reserve) +
+        ' / เบิก ' + Fmt.money(m.disburse) + '">' +
+        '<div class="cbar-stack">' +
+        '<div class="cbar-seg res" style="height:' + hr.toFixed(1) + '%"></div>' +
+        '<div class="cbar-seg dis" style="height:' + hd.toFixed(1) + '%"></div>' +
+        '</div><div class="cbar-label">' + esc(Fmt.month(m.month)) + '</div></div>';
+    }).join('') + '</div>' +
+      '<div class="bar-legend" style="justify-content:center;margin-top:10px">' +
+      '<span><i style="background:#f59e0b"></i>การจอง</span>' +
+      '<span><i style="background:#4f46e5"></i>เบิกใช้แล้ว</span></div>';
+  },
+  healthPill: function (s) {
+    const pct = s.usagePctOfUsable;
+    if (s.usableAmount <= 0) return '<span class="pill">ยังไม่กำหนดวงเงินที่ใช้ได้</span>';
+    if (pct >= (State.app.dangerPct || 95)) return '<span class="pill pill-rose pill-dot">ใช้เกือบเต็ม ' + Fmt.pct(pct) + '</span>';
+    if (pct >= (State.app.warnPct || 80)) return '<span class="pill pill-amber pill-dot">ใช้ไป ' + Fmt.pct(pct) + '</span>';
+    return '<span class="pill pill-teal pill-dot">ใช้ไป ' + Fmt.pct(pct) + '</span>';
+  }
+};
+
+/* ───────── router ───────── */
+window.Router = {
+  routes: [
+    { re: /^#\/dashboard$/, view: 'dashboard' },
+    { re: /^#\/budget\/([^/]+)(?:\/(\w+))?$/, view: 'budget' },
+    { re: /^#\/transactions$/, view: 'transactions' },
+    { re: /^#\/audit$/, view: 'audit' },
+    { re: /^#\/admin\/budgets$/, view: 'adminBudgets' },
+    { re: /^#\/admin\/types$/, view: 'adminTypes' },
+    { re: /^#\/admin\/users$/, view: 'adminUsers' }
+  ],
+  go: function (hash) {
+    if (location.hash === hash) Router.render();
+    else location.hash = hash;
+  },
+  current: function () {
+    const h = location.hash || '#/dashboard';
+    for (let i = 0; i < Router.routes.length; i++) {
+      const m = h.match(Router.routes[i].re);
+      if (m) return { view: Router.routes[i].view, params: m.slice(1), hash: h };
+    }
+    return { view: 'dashboard', params: [], hash: '#/dashboard' };
+  },
+  render: function () {
+    const r = Router.current();
+    State.route = r.hash;
+    UI.toggleSidebar(false);
+    App.closeAdminMenu();
+    qsa('.nav-item, .admin-menu-item').forEach(function (n) {
+      const route = n.getAttribute('data-route');
+      n.classList.toggle('active', route === r.hash || (r.view === 'budget' && route === '#/budget/' + r.params[0]));
+    });
+    window.scrollTo(0, 0);
+    const fn = Views[r.view];
+    if (fn) fn.apply(null, r.params);
+    else Views.dashboard();
+  }
+};
+
+window.addEventListener('hashchange', function () { Router.render(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    if (!el('modalWrap').classList.contains('hidden')) UI.closeModal();
+    else if (!el('drawerWrap').classList.contains('hidden')) UI.closeDrawer();
+    else if (el('manualOverlay') && !el('manualOverlay').classList.contains('hidden')) App.closeManual();
+    else App.closeAdminMenu();
+  }
+});
+document.addEventListener('click', function (e) {
+  const wrap = el('adminMenuWrap');
+  if (!wrap || wrap.contains(e.target)) return;
+  App.closeAdminMenu();
+});
+
+/* ───────── app bootstrap ───────── */
+window.App = {
+  start: function () {
+    try {
+      const t = localStorage.getItem('ba_theme');
+      if (t) {
+        document.documentElement.setAttribute('data-theme', t);
+        el('themeBtn').textContent = t === 'dark' ? '☀' : '◐';
+      }
+    } catch (e) {}
+
+    api('app.bootstrap').then(function (data) {
+      State.user = data.user;
+      State.app = data.app;
+      State.labels = data.labels;
+      State.enums = data.enums;
+      State.budgets = data.budgets || [];
+      State.categories = data.categories || [];
+      State.budgetTypes = data.budgetTypes || [];
+      State.recent = data.recent || [];
+      App.paintChrome();
+      el('splash').classList.add('hidden');
+      el('shell').classList.remove('hidden');
+      if (!location.hash) location.hash = '#/dashboard';
+      Router.render();
+    }).catch(function (err) {
+      el('splashNote').innerHTML = '<div style="max-width:420px;color:var(--rose);font-size:13px">' +
+        esc(err.message) + '</div><button class="btn btn-primary" style="margin-top:14px" onclick="location.reload()">ลองอีกครั้ง</button>';
+    });
+  },
+
+  paintChrome: function () {
+    el('brandName').textContent = State.app.name || 'ระบบบริหารงบประมาณ';
+    el('brandOrg').textContent = State.app.org || '';
+    el('userName').textContent = State.user.displayName || State.user.email;
+    el('userRole').textContent = State.user.roleLabel || State.user.systemRole || '';
+    el('userAvatar').textContent = Fmt.initials(State.user.displayName || State.user.email);
+
+    const isOwnerSomewhere = State.user.isSuperAdmin || State.budgets.some(function (b) { return b.canManage; });
+    qsa('.admin-only').forEach(function (n) { n.classList.toggle('hidden', !isOwnerSomewhere); });
+    qsa('.super-only').forEach(function (n) { n.classList.toggle('hidden', !State.user.isSuperAdmin); });
+    qsa('.overview-only').forEach(function (n) { n.classList.toggle('hidden', !State.user.canViewOverview); });
+    qsa('.audit-only').forEach(function (n) { n.classList.toggle('hidden', !State.user.canViewAudit); });
+
+    const btn = el('adminMenuBtn');
+    if (btn) {
+      btn.classList.toggle('is-admin', isOwnerSomewhere);
+      btn.setAttribute('aria-haspopup', isOwnerSomewhere ? 'menu' : 'false');
+      if (!isOwnerSomewhere) App.closeAdminMenu();
+    }
+
+    // ผู้ใช้ทั่วไปที่ไม่มีภาพรวม → หน้าแรกเป็นรายการใช้งบ / งบแรก
+    if (!State.user.canViewOverview && (location.hash === '' || location.hash === '#/dashboard')) {
+      if (State.budgets.length === 1) location.hash = '#/budget/' + State.budgets[0].budgetId;
+      else location.hash = '#/transactions';
+    }
+
+    // เมนูซ้าย: เฉพาะงบที่เข้าถึงได้ (State.budgets กรองจาก backend แล้ว)
+    const list = (State.budgets || []).slice().sort(function (a, b) {
+      const c = String(a.code || '').localeCompare(String(b.code || ''));
+      return c || String(a.name || '').localeCompare(String(b.name || ''), 'th');
+    });
+    const countNode = el('navBudgetCount');
+    if (countNode) countNode.textContent = list.length ? String(list.length) : '';
+    el('navBudgets').innerHTML = list.length
+      ? list.map(function (b) {
+        const hash = '#/budget/' + attr(b.budgetId);
+        return '<a class="nav-item" target="_self" href="' + hash + '" data-route="' + hash + '">' +
+          '<span class="nav-bcode ' + C.statusTone(b.status) + '">' + esc(b.code) + '</span>' +
+          '<span class="nav-bname">' + esc(b.name) + '</span></a>';
+      }).join('')
+      : '<div class="dim" style="padding:6px 11px;font-size:12.5px">ยังไม่ได้รับสิทธิ์ดูงบใด ๆ</div>';
+  },
+
+  toggleAdminMenu: function (ev) {
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    const btn = el('adminMenuBtn');
+    if (!btn || !btn.classList.contains('is-admin')) return;
+    const menu = el('adminMenu');
+    if (!menu) return;
+    if (!menu.classList.contains('hidden')) {
+      App.closeAdminMenu();
+      return;
+    }
+    menu.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    App.positionAdminMenu();
+  },
+
+  closeAdminMenu: function () {
+    const menu = el('adminMenu');
+    const btn = el('adminMenuBtn');
+    if (menu) menu.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  },
+
+  positionAdminMenu: function () {
+    const menu = el('adminMenu');
+    const wrap = el('adminMenuWrap');
+    if (!menu || !wrap || menu.classList.contains('hidden')) return;
+    // เปิดขึ้นด้านบนเป็นค่าเริ่มต้น — ถ้าชนขอบบนให้เลื่อนลงให้อยู่ในจอ
+    menu.style.bottom = 'calc(100% + 8px)';
+    menu.style.top = 'auto';
+    menu.style.maxHeight = '';
+    const rect = menu.getBoundingClientRect();
+    const pad = 12;
+    if (rect.top < pad) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const spaceAbove = Math.max(wrapRect.top - pad, 80);
+      menu.style.maxHeight = spaceAbove + 'px';
+    }
+  },
+
+
+  openManual: function () {
+    App.closeAdminMenu();
+    const ov = el('manualOverlay');
+    if (!ov) return;
+    const ver = (State.app && State.app.version) || '';
+    qsa('.manual-ver').forEach(function (n) { n.textContent = ver || '—'; });
+    if (window.APP_LOGO_SRC) {
+      qsa('#manualOverlay img.app-logo').forEach(function (img) {
+        img.setAttribute('src', window.APP_LOGO_SRC);
+      });
+    }
+    ov.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    const sc = el('manualScroll');
+    if (sc) sc.scrollTop = 0;
+  },
+
+  closeManual: function () {
+    const ov = el('manualOverlay');
+    if (ov) ov.classList.add('hidden');
+    document.body.classList.remove('manual-print-mode');
+    if (el('drawerWrap').classList.contains('hidden') && el('modalWrap').classList.contains('hidden')) {
+      document.body.style.overflow = '';
+    }
+  },
+
+  printManual: function () {
+    const ov = el('manualOverlay');
+    if (!ov || ov.classList.contains('hidden')) App.openManual();
+    document.body.classList.add('manual-print-mode');
+    setTimeout(function () {
+      window.print();
+      setTimeout(function () { document.body.classList.remove('manual-print-mode'); }, 300);
+    }, 50);
+  },
+
+  reload: function () {
+    State.detailCache = {};
+    return api('app.bootstrap').then(function (data) {
+      State.user = data.user; State.app = data.app;
+      State.budgets = data.budgets || []; State.categories = data.categories || [];
+      State.budgetTypes = data.budgetTypes || [];
+      State.recent = data.recent || [];
+      App.paintChrome();
+      Router.render();
+      UI.ok('อัปเดตข้อมูลแล้ว');
+    }).catch(function (e) { UI.err('โหลดข้อมูลไม่สำเร็จ', e.message); });
+  },
+
+  budget: function (id) {
+    return State.budgets.filter(function (b) { return b.budgetId === id; })[0];
+  },
+  typeLabel: function (code) {
+    const c = String(code || '').toUpperCase();
+    const t = (State.budgetTypes || []).find(function (x) { return x.code === c; });
+    return t ? (t.code + ' – ' + t.name) : c;
+  },
+
+  download: function (attachmentId) {
+    UI.toast('กำลังเตรียมไฟล์…');
+    api('file.get', { attachmentId: attachmentId }).then(function (f) {
+      const bin = atob(f.dataBase64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: f.mimeType }));
+      const a = document.createElement('a');
+      a.href = url; a.download = f.fileName; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 1500);
+    }).catch(function (e) { UI.err('ดาวน์โหลดไม่สำเร็จ', e.message); });
+  }
+};
+
+window.addEventListener('DOMContentLoaded', function () {
+  if (window.__BA_STARTED__) return;
+  window.__BA_STARTED__ = true;
+  App.start();
+});
+</script>

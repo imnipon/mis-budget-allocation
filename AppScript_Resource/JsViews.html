@@ -1,0 +1,818 @@
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   JsViews — หน้าจอทั้งหมด (ส่วน View สำหรับผู้ดู + ผู้ดูแล)
+   ═══════════════════════════════════════════════════════════════════ */
+
+window.Views = window.Views || {};
+
+/* ───────────────────────── ภาพรวม ───────────────────────── */
+Views.dashboard = function () {
+  UI.crumbs(['ภาพรวมงบประมาณ']);
+  const v = el('view');
+
+  if (!State.user.canViewOverview) {
+    if (State.budgets.length === 1) return Router.go('#/budget/' + State.budgets[0].budgetId);
+    return Router.go('#/transactions');
+  }
+
+  if (!State.budgets.length && !State.user.isSuperAdmin) {
+    v.innerHTML = '<div class="card"><div class="card-body">' +
+      '<div class="callout warn"><span class="ci">!</span><div><strong>บัญชีของคุณยังไม่ได้รับสิทธิ์</strong><br>' +
+      'อีเมล <b>' + esc(State.user.email) + '</b> ยังไม่ได้รับสิทธิ์ดูงบประมาณใด ๆ ' +
+      'กรุณาติดต่อผู้ดูแลระบบ</div></div>' +
+      '</div></div>';
+    return;
+  }
+
+  if (!State._dashFilter) {
+    State._dashFilter = { statuses: ['NEW', 'PROCESS', 'CLOSED'], codes: [], codesReady: false };
+  }
+
+  UI.busy(v, true);
+  const f = State._dashFilter;
+  const payload = { statuses: f.statuses };
+  if (f.codesReady) payload.codes = f.codes;
+  api('report.overview', payload).then(function (r) {
+    Views._renderDashboard(r);
+  }).catch(function (e) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout danger"><span class="ci">✕</span><div>' +
+      esc(e.message) + '</div></div></div></div>';
+  });
+};
+
+Views._dashFilterBar = function (r) {
+  const f = State._dashFilter;
+  const statusOpts = (r.filterOptions && r.filterOptions.statuses) || [
+    { value: 'NEW', label: 'New' }, { value: 'PROCESS', label: 'Process' }, { value: 'CLOSED', label: 'Close' }
+  ];
+  const codeOpts = (r.filterOptions && r.filterOptions.codes) || [];
+  // ครั้งแรก: ติ๊กประเภททั้งหมดที่มีในระบบ
+  if (!f.codesReady) {
+    f.codes = codeOpts.map(function (c) { return typeof c === 'string' ? c : c.value; });
+    f.codesReady = true;
+  }
+
+  return '<div class="card" style="margin-bottom:16px"><div class="card-body" style="padding:14px 16px">' +
+    '<div class="dash-filters">' +
+    '<div class="dash-filter-group">' +
+    '<div class="dash-filter-label">สถานะ ' + C.tip('เลือกได้หลายค่า — KPI และกราฟคำนวณจากโครงการที่เลือกเท่านั้น') + '</div>' +
+    '<div class="chip-row">' + statusOpts.map(function (s) {
+      const on = f.statuses.indexOf(s.value) >= 0;
+      return '<label class="chip' + (on ? ' on' : '') + '">' +
+        '<input type="checkbox" data-dash="status" value="' + attr(s.value) + '"' + (on ? ' checked' : '') +
+        ' onchange="Views._dashFilterChange()">' + esc(s.label) + '</label>';
+    }).join('') + '</div></div>' +
+    '<div class="dash-filter-group">' +
+    '<div class="dash-filter-label">ประเภท / หมวด ' + C.tip('กำหนดที่ หลังบ้าน › จัดการประเภท') + '</div>' +
+    (codeOpts.length
+      ? '<div class="chip-row">' + codeOpts.map(function (c) {
+          const val = typeof c === 'string' ? c : c.value;
+          const lab = typeof c === 'string' ? c : c.label;
+          const on = f.codes.indexOf(val) >= 0;
+          return '<label class="chip' + (on ? ' on' : '') + '">' +
+            '<input type="checkbox" data-dash="code" value="' + attr(val) + '"' + (on ? ' checked' : '') +
+            ' onchange="Views._dashFilterChange()">' + esc(lab) + '</label>';
+        }).join('') + '</div>'
+      : '<span class="dim" style="font-size:13px">ยังไม่มีประเภท — ไปที่ หลังบ้าน › จัดการประเภท</span>') +
+    '</div>' +
+    '<div class="dash-filter-actions">' +
+    '<button class="btn btn-ghost btn-sm" onclick="Views._dashFilterReset()">เลือกทั้งหมด</button>' +
+    '</div></div></div></div>';
+};
+
+Views._dashFilterChange = function () {
+  const statuses = [];
+  const codes = [];
+  qsa('input[data-dash="status"]:checked').forEach(function (n) { statuses.push(n.value); });
+  qsa('input[data-dash="code"]:checked').forEach(function (n) { codes.push(n.value); });
+  State._dashFilter = { statuses: statuses, codes: codes, codesReady: true };
+  Views.dashboard();
+};
+
+Views._dashFilterReset = function () {
+  State._dashFilter = { statuses: ['NEW', 'PROCESS', 'CLOSED'], codes: [], codesReady: false };
+  Views.dashboard();
+};
+
+Views._renderDashboard = function (r) {
+  const v = el('view');
+  const t = r.total;
+    const canCreate = State.user.isSuperAdmin;
+  const shown = r.budgets.length;
+
+  v.innerHTML =
+    '<div class="page-head"><div>' +
+    '<h1>ภาพรวมงบประมาณ ' + C.tip('สรุปโครงการตามตัวกรอง — เข้าได้เฉพาะผู้ดูแลระบบและผู้บริหาร') + '</h1>' +
+    '<p>แสดง ' + shown + ' โครงการตามตัวกรอง · ข้อมูลล่าสุดจาก Google Sheets</p></div>' +
+    '<div class="row">' +
+    (canCreate ? '<button class="btn btn-primary" onclick="Forms.budget()">+ สร้างงบประมาณ</button>' : '') +
+    '</div></div>' +
+
+    Views._dashFilterBar(r) +
+
+    '<div class="grid g-4">' +
+    C.kpi({ label: 'วงเงินงบประมาณรวม', value: Fmt.money(t.budgetAmount, 0), unit: 'บาท', tone: 'sky',
+      sub: 'ยังไม่ปล่อยให้ใช้ ' + Fmt.money(t.unreleased, 0) + ' บาท' }) +
+    C.kpi({ label: 'จำนวนที่ใช้ได้', value: Fmt.money(t.usableAmount, 0), unit: 'บาท', tone: 'violet',
+      sub: 'คิดเป็น ' + (t.budgetAmount ? Fmt.pct(t.usableAmount / t.budgetAmount * 100) : '0%') + ' ของวงเงิน' }) +
+    C.kpi({ label: 'เบิกใช้แล้ว', value: Fmt.money(t.disbursed, 0), unit: 'บาท', tone: '',
+      sub: 'จองค้างอีก ' + Fmt.money(t.reservedOutstanding, 0) + ' บาท' }) +
+    C.kpi({ label: 'คงเหลือใช้ได้', value: Fmt.money(t.availableToSpend, 0), unit: 'บาท',
+      tone: t.usagePctOfUsable >= (State.app.dangerPct || 95) ? 'rose' : 'teal',
+      sub: 'ใช้ไปแล้ว ' + Fmt.pct(t.usagePctOfUsable) + ' ของจำนวนที่ใช้ได้' }) +
+    '</div>' +
+
+    '<div class="grid g-2-1 mt">' +
+    '<div class="card"><div class="card-head"><div><h3>ความเคลื่อนไหวรายเดือน</h3>' +
+    '<div class="sub">จากโครงการตามตัวกรอง (12 เดือนล่าสุด)</div></div></div>' +
+    '<div class="card-body">' + C.monthlyChart(r.monthly) + '</div></div>' +
+
+    '<div class="card"><div class="card-head"><div><h3>สัดส่วนการใช้งบ</h3>' +
+    '<div class="sub">เทียบกับจำนวนที่ใช้ได้</div></div></div>' +
+    '<div class="card-body">' + C.donut([
+      { label: 'เบิกใช้แล้ว', value: t.disbursed, color: '#4f46e5' },
+      { label: 'จองค้าง', value: t.reservedOutstanding, color: '#f59e0b' },
+      { label: 'คงเหลือใช้ได้', value: Math.max(t.availableToSpend, 0), color: '#14b8a6' }
+    ], Fmt.pct(t.usagePctOfUsable), 'ใช้ไปแล้ว') + '</div></div>' +
+    '</div>' +
+
+    '<h2 style="font-size:16px;margin:24px 0 12px">โครงการงบประมาณ</h2>' +
+    (r.budgets.length
+      ? '<div class="grid g-3">' + r.budgets.map(Views._budgetCard).join('') + '</div>'
+      : '<div class="card">' + C.empty('ไม่มีโครงการตามตัวกรอง', 'ลองเลือกสถานะหรือประเภทอื่น หรือสร้างงบประมาณใหม่') + '</div>') +
+
+    '<div class="grid g-2 mt">' +
+    '<div class="card"><div class="card-head"><div><h3>กิจกรรมล่าสุด</h3>' +
+    '<div class="sub">ทุกการเปลี่ยนแปลงถูกบันทึกและตรวจย้อนหลังได้</div></div>' +
+    (State.user.canViewAudit
+      ? '<button class="btn btn-ghost btn-sm" onclick="Router.go(\'#/audit\')">ดูทั้งหมด →</button>' : '') +
+    '</div>' +
+    '<div class="card-body">' + Views._timeline(State.recent.slice(0, 8)) + '</div></div>' +
+
+    '<div class="card"><div class="card-head"><div><h3>การใช้งบตามหมวดรายจ่าย</h3>' +
+    '<div class="sub">รวมจากโครงการตามตัวกรอง</div></div></div>' +
+    '<div class="card-body">' + Views._categoryList(r.byCategory) + '</div></div>' +
+    '</div>';
+};
+
+Views._budgetCard = function (b, i) {
+  const s = b.summary;
+  return '<div class="bcard" onclick="Router.go(\'#/budget/' + attr(b.budgetId) + '\')">' +
+    '<div class="bcard-top"><div class="bcode ' + C.statusTone(b.status) + '">' + esc(b.code) + '</div>' +
+    '<div style="flex:1;min-width:0"><h4>' + esc(b.name) + '</h4>' +
+    '<div class="bmeta">' + (b.fiscalYear ? esc(b.fiscalYear) + ' · ' : '') +
+    (b.ownerEmail ? esc(b.ownerEmail) + ' · ' : '') + s.txnCount + ' รายการ</div></div>' +
+    C.statusPill(b.status) + '</div>' +
+    C.usageBar(s) +
+    '<div class="bnums">' +
+    '<div><div class="bnum-label">วงเงิน</div><div class="bnum-value num">' + Fmt.compact(s.budgetAmount) + '</div></div>' +
+    '<div><div class="bnum-label">ใช้ได้</div><div class="bnum-value num">' + Fmt.compact(s.usableAmount) + '</div></div>' +
+    '<div><div class="bnum-label">คงเหลือ</div><div class="bnum-value num" style="color:' +
+    (s.availableToSpend <= 0 ? 'var(--rose)' : 'var(--teal)') + '">' + Fmt.compact(s.availableToSpend) + '</div></div>' +
+    '</div>' +
+    '<div class="row-between" style="margin-top:2px">' + C.healthPill(s) +
+    '<span class="dim" style="font-size:12px">ดูรายละเอียด →</span></div>' +
+    '</div>';
+};
+
+Views._categoryList = function (cats) {
+  if (!cats || !cats.length) return C.empty('ยังไม่มีข้อมูลหมวดการใช้งบ', 'ระบุ "หมวด" ตอนบันทึกรายการเพื่อดูสรุปนี้');
+  const max = Math.max.apply(null, cats.map(function (c) { return c.amount; })) || 1;
+  return '<div class="stack" style="gap:12px">' + cats.map(function (c) {
+    return '<div><div class="row-between" style="font-size:13px;margin-bottom:5px">' +
+      '<span>' + esc(c.category) + ' <span class="dim">(' + c.count + ')</span></span>' +
+      '<b class="num">' + Fmt.money(c.amount, 0) + '</b></div>' +
+      '<div class="bar"><span class="seg-dis" style="width:' + (c.amount / max * 100).toFixed(1) + '%"></span></div></div>';
+  }).join('') + '</div>';
+};
+
+Views._timeline = function (rows) {
+  if (!rows || !rows.length) return C.empty('ยังไม่มีกิจกรรม', 'เมื่อมีการเปลี่ยนแปลงข้อมูล จะปรากฏที่นี่');
+  const toneOf = {
+    AMOUNT_SET: 'amber', TXN_CREATE: 'teal', TXN_CANCEL: 'rose', TXN_UPDATE: '',
+    PERM_GRANT: '', PERM_REVOKE: 'rose', BUDGET_CREATE: 'teal'
+  };
+  return '<div class="timeline">' + rows.map(function (r) {
+    return '<div class="tl-item ' + (toneOf[r.action] || '') + '">' +
+      '<div class="tl-head"><b>' + esc(r.actionLabel) + '</b>' +
+      (r.budgetName ? '<span class="pill">' + esc(r.budgetName.split(' – ')[0]) + '</span>' : '') +
+      '<span class="tl-time">' + esc(Fmt.dateTime(r.timestamp)) + '</span></div>' +
+      '<div class="tl-body">' + esc(r.summary) + '<br><span class="dim">โดย ' + esc(r.actor) + '</span>' +
+      (r.reason ? '<br><span class="dim">เหตุผล: ' + esc(r.reason) + '</span>' : '') + '</div>' +
+      (r.attachments && r.attachments.length ? '<div style="margin-top:5px">' + C.attachments(r.attachments) + '</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+};
+
+/* ───────────────────────── รายละเอียดงบประมาณ ───────────────────────── */
+Views.budget = function (budgetId, tab) {
+  tab = tab || 'summary';
+  const v = el('view');
+  UI.busy(v, true);
+
+  api('budget.detail', { budgetId: budgetId }).then(function (d) {
+    State.detailCache[budgetId] = d;
+    UI.crumbs(['งบประมาณ', d.code + ' – ' + d.name]);
+    const s = d.summary;
+    const canManage = d.canManage;
+    const canTxn = d.canManageTxn;
+    const canAudit = d.canViewAudit;
+
+    const tabs = [
+      ['summary', 'สรุป', ''],
+      ['txns', 'รายการใช้งบ', d.transactions.length]
+    ];
+    if (canAudit) tabs.push(['changes', 'ประวัติวงเงิน', d.changes.length]);
+    if (canManage) tabs.push(['perms', 'สิทธิ์การเข้าถึง', d.permissions.filter(function (p) { return p.status === 'ACTIVE'; }).length]);
+    if (canAudit) tabs.push(['audit', 'บันทึกการตรวจสอบ', '']);
+
+    v.innerHTML =
+      '<div class="page-head"><div>' +
+      '<div class="row" style="gap:12px">' +
+      '<div class="bcode ' + C.statusTone(d.status) + '" style="width:46px;height:46px;flex:0 0 46px;font-size:18px">' + esc(d.code) + '</div>' +
+      '<div><h1>' + esc(d.name) + '</h1>' +
+      '<p>' + (d.fiscalYear ? esc(d.fiscalYear) + ' · ' : '') +
+      'ผู้รับผิดชอบหลัก ' + esc(d.ownerEmail || '—') +
+      ' · ' + C.rolePill(d.role) + ' ' + C.statusPill(d.status) + '</p></div></div></div>' +
+      '<div class="row">' +
+      (canTxn ? '<button class="btn btn-teal" onclick="Forms.txn(\'' + attr(budgetId) + '\',\'RESERVE\')">+ บันทึกการจอง</button>' +
+        '<button class="btn btn-primary" onclick="Forms.txn(\'' + attr(budgetId) + '\',\'DISBURSE\')">+ บันทึกการเบิก</button>' : '') +
+      (canManage ? '<button class="btn btn-outline" onclick="Forms.amount(\'' + attr(budgetId) + '\')">฿ ปรับวงเงิน</button>' +
+        '<button class="btn btn-ghost" onclick="Forms.budget(\'' + attr(budgetId) + '\')">⚙ แก้ไขข้อมูลงบ</button>' : '') +
+      '</div></div>' +
+
+      '<div class="grid g-4">' +
+      C.kpi({ label: 'วงเงินงบประมาณ', value: Fmt.money(s.budgetAmount, 0), unit: 'บาท', tone: 'sky',
+        sub: 'ยังไม่ปล่อยให้ใช้ ' + Fmt.money(s.unreleased, 0) }) +
+      C.kpi({ label: 'จำนวนที่ใช้ได้', value: Fmt.money(s.usableAmount, 0), unit: 'บาท', tone: 'violet',
+        sub: s.budgetAmount ? Fmt.pct(s.usableAmount / s.budgetAmount * 100) + ' ของวงเงิน' : '—' }) +
+      C.kpi({ label: 'จองค้าง / เบิกแล้ว', value: Fmt.money(s.reservedOutstanding, 0) + ' / ' + Fmt.money(s.disbursed, 0),
+        tone: 'amber', sub: s.reserveCount + ' รายการจอง · ' + s.disburseCount + ' รายการเบิก' }) +
+      C.kpi({ label: 'คงเหลือใช้ได้', value: Fmt.money(s.availableToSpend, 0), unit: 'บาท',
+        tone: s.availableToSpend <= 0 ? 'rose' : 'teal', sub: 'ผูกพันแล้ว ' + Fmt.money(s.committed, 0) }) +
+      '</div>' +
+
+      '<div class="card mt"><div class="tabs" id="btabs">' +
+      tabs.map(function (t) {
+        return '<div class="tab' + (t[0] === tab ? ' active' : '') + '" onclick="Router.go(\'#/budget/' +
+          attr(budgetId) + '/' + t[0] + '\')">' + esc(t[1]) +
+          (t[2] !== '' ? '<span class="cnt">' + t[2] + '</span>' : '') + '</div>';
+      }).join('') + '</div><div id="btabBody"></div></div>';
+
+    const body = el('btabBody');
+    if (tab === 'summary') body.innerHTML = Views._budgetSummary(d);
+    else if (tab === 'txns') body.innerHTML = Views._txnTable(d.transactions, { showBudget: false });
+    else if (tab === 'changes') body.innerHTML = Views._changeTable(d.changes);
+    else if (tab === 'perms') body.innerHTML = Views._permTable(d);
+    else if (tab === 'audit') {
+      body.innerHTML = '<div class="card-body">' + '<div class="skel" style="width:40%"></div></div>';
+      api('audit.list', { budgetId: budgetId, limit: 100 }).then(function (a) {
+        body.innerHTML = '<div class="card-body">' + Views._timeline(a.rows) + '</div>';
+      });
+    }
+  }).catch(function (e) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout danger"><span class="ci">✕</span><div>' +
+      esc(e.message) + '</div></div></div></div>';
+  });
+};
+
+Views._budgetSummary = function (d) {
+  const s = d.summary;
+  const openReserves = d.transactions.filter(function (t) { return t.txnType === 'RESERVE' && t.status === 'ACTIVE'; });
+  return '<div class="card-body">' +
+    '<div class="grid g-2">' +
+    '<div>' +
+    '<h4 style="font-size:14px;margin-bottom:10px">สถานะการใช้งบ</h4>' +
+    C.usageBar(s) +
+    '<div class="mt">' + C.healthPill(s) + '</div>' +
+    (d.description ? '<div class="callout mt"><span class="ci">ℹ</span><div>' + esc(d.description) + '</div></div>' : '') +
+    (s.usableAmount <= 0 ? '<div class="callout warn mt"><span class="ci">!</span><div>' +
+      '<strong>ยังไม่ได้กำหนดจำนวนที่ใช้ได้</strong><br>ต้องกำหนดก่อนจึงจะบันทึกรายการจอง/เบิกได้</div></div>' : '') +
+    '<div class="mt"><table class="tbl"><tbody>' +
+    [['วงเงินงบประมาณ', s.budgetAmount], ['จำนวนที่ใช้ได้', s.usableAmount],
+     ['ยังไม่ปล่อยให้ใช้', s.unreleased], ['ยอดจองทั้งหมด', s.reservedTotal],
+     ['ยอดจองคงค้าง', s.reservedOutstanding], ['เบิกใช้แล้ว', s.disbursed],
+     ['ผูกพันรวม (จองค้าง + เบิก)', s.committed], ['คงเหลือใช้ได้', s.availableToSpend],
+     ['คงเหลือจากวงเงินทั้งหมด', s.remainingOfBudget]].map(function (r, i) {
+      return '<tr><td>' + esc(r[0]) + '</td><td class="r num"' +
+        (i >= 6 ? ' style="font-weight:700"' : '') + '>' + Fmt.money(r[1]) + '</td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '</div>' +
+    '<div>' +
+    '<h4 style="font-size:14px;margin-bottom:10px">สัดส่วน</h4>' +
+    C.donut([
+      { label: 'เบิกใช้แล้ว', value: s.disbursed, color: '#4f46e5' },
+      { label: 'จองค้าง', value: s.reservedOutstanding, color: '#f59e0b' },
+      { label: 'คงเหลือใช้ได้', value: Math.max(s.availableToSpend, 0), color: '#14b8a6' },
+      { label: 'ยังไม่ปล่อยให้ใช้', value: Math.max(s.unreleased, 0), color: '#cbd5e1' }
+    ], Fmt.pct(s.usagePctOfUsable), 'ใช้ไปแล้ว') +
+    '<h4 style="font-size:14px;margin:22px 0 10px">รายการจองที่ยังไม่เบิก (' + openReserves.length + ')</h4>' +
+    (openReserves.length
+      ? '<div class="stack" style="gap:8px">' + openReserves.slice(0, 6).map(function (t) {
+        return '<div class="row-between" style="font-size:13px;border:1px solid var(--border);border-radius:9px;padding:9px 11px">' +
+          '<div><b>' + esc(t.txnNo) + '</b><div class="t-sub">' + esc(t.title) + '</div></div>' +
+          '<div class="r"><b class="num">' + Fmt.money(t.outstanding) + '</b>' +
+          '<div class="t-sub">จาก ' + Fmt.money(t.amount) + '</div>' +
+          (d.canManageTxn
+            ? '<button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="Forms.txn(\'' +
+              attr(d.budgetId) + '\',\'DISBURSE\',\'' + attr(t.txnId) + '\')">เบิกจากรายการนี้</button>'
+            : '') +
+          '</div></div>';
+      }).join('') + '</div>'
+      : '<p class="dim" style="font-size:13px">ไม่มีรายการจองคงค้าง</p>') +
+    '<h4 style="font-size:14px;margin:22px 0 10px">ความเคลื่อนไหวรายเดือน</h4>' +
+    C.monthlyChart(d.monthly) +
+    '</div></div></div>';
+};
+
+/* ───────────────────────── ตารางรายการใช้งบ ───────────────────────── */
+Views._txnTable = function (rows, opt) {
+  opt = opt || {};
+  if (!rows.length) {
+    return '<div>' + C.empty('ยังไม่มีรายการใช้งบ', 'ผู้ดูแลงบสามารถกดปุ่ม "บันทึกการจอง" หรือ "บันทึกการเบิก" ด้านบน', '☰') + '</div>';
+  }
+  return '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+    '<th>เลขที่ / วันที่</th>' + (opt.showBudget ? '<th>งบ</th>' : '') +
+    '<th>ประเภท</th><th>รายละเอียด</th><th class="r">จำนวนเงิน</th><th class="r">คงค้าง</th>' +
+    '<th>สถานะ</th><th>ไฟล์แนบ</th><th class="r">จัดการ</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(function (t) {
+      return '<tr class="' + (t.status === 'CANCELLED' ? 'cancelled' : '') + '">' +
+        '<td><div class="t-title">' + esc(t.txnNo) + '</div><div class="t-sub">' + esc(Fmt.date(t.txnDate)) + '</div></td>' +
+        (opt.showBudget ? '<td><span class="pill">' + esc(t.budgetCode) + '</span></td>' : '') +
+        '<td>' + C.typePill(t.txnType) + (t.reserveTxnNo ? '<div class="t-sub">อ้างอิงจอง ' + esc(t.reserveTxnNo) + '</div>' : '') + '</td>' +
+        '<td><div class="t-title">' + esc(t.title) + '</div>' +
+        '<div class="t-sub">' + (t.category ? esc(t.category) + ' · ' : '') + (t.vendor ? esc(t.vendor) + ' · ' : '') +
+        'บันทึกโดย ' + esc(t.createdBy) + '</div></td>' +
+        '<td class="r num"><b>' + Fmt.money(t.amount) + '</b></td>' +
+        '<td class="r num">' + (t.txnType === 'RESERVE' ? Fmt.money(t.outstanding) : '<span class="dim">—</span>') + '</td>' +
+        '<td>' + (t.status === 'ACTIVE' ? '<span class="pill pill-sky">ใช้งาน</span>' : '<span class="pill">ระงับ</span>') + '</td>' +
+        '<td>' + C.attachments(t.attachments) + '</td>' +
+        '<td class="r"><div class="t-actions">' +
+        '<button class="btn btn-ghost btn-sm" onclick="Views.txnDetail(\'' + attr(t.txnId) + '\')" title="ดูรายละเอียด/ประวัติ">⋯</button>' +
+        (t.canManage && t.status !== 'CANCELLED' && t.txnType === 'RESERVE' && t.outstanding > 0
+          ? '<button class="btn btn-primary btn-sm" onclick="Forms.txn(\'' + attr(t.budgetId) + '\',\'DISBURSE\',\'' + attr(t.txnId) + '\')">เบิก</button>'
+          : '') +
+        (t.canManage && t.status !== 'CANCELLED'
+          ? '<button class="btn btn-outline btn-sm" onclick="Forms.txnEdit(\'' + attr(t.txnId) + '\')">แก้ไข</button>' +
+            '<button class="btn btn-ghost btn-sm" style="color:var(--rose)" onclick="Forms.txnCancel(\'' + attr(t.txnId) + '\')">ยกเลิก</button>'
+          : '') +
+        (State.user.isSuperAdmin && t.status !== 'CANCELLED'
+          ? '<button class="btn btn-ghost btn-sm" onclick="Forms.txnMove(\'' + attr(t.txnId) + '\')">ย้าย</button>'
+          : '') +
+        '</div></td></tr>';
+    }).join('') + '</tbody></table></div>';
+};
+
+Views.txnDetail = function (txnId) {
+  const t = Views._findTxn(txnId);
+  UI.openModal('รายละเอียดรายการ ' + (t ? t.txnNo : ''),
+    '<div class="skel" style="width:50%"></div>');
+  api('txn.history', { txnId: txnId }).then(function (rows) {
+    const info = t ? '<table class="tbl" style="margin-bottom:18px"><tbody>' +
+      [['เลขที่', t.txnNo], ['ประเภท', t.txnTypeLabel], ['วันที่', Fmt.date(t.txnDate)],
+       ['ชื่อรายการ', t.title], ['รายละเอียด', t.description || '—'], ['หมวด', t.category || '—'],
+       ['คู่ค้า/ผู้รับเงิน', t.vendor || '—'], ['จำนวนเงิน', Fmt.money(t.amount) + ' บาท'],
+       ['ถูกเบิกไปแล้ว', t.txnType === 'RESERVE' ? Fmt.money(t.settledAmount) + ' บาท' : '—'],
+       ['สถานะ', t.statusLabel], ['บันทึกโดย', t.createdBy + ' · ' + Fmt.dateTime(t.createdAt)],
+       ['แก้ไขล่าสุด', (t.updatedBy || '—') + ' · ' + Fmt.dateTime(t.updatedAt)]
+      ].map(function (r) {
+        return '<tr><td style="width:170px;color:var(--text-2)">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<h4 style="font-size:13.5px;margin-bottom:8px">ไฟล์แนบ</h4><div style="margin-bottom:18px">' +
+      C.attachments(t.attachments) + '</div>' : '';
+    el('modalBody').innerHTML = info +
+      '<h4 style="font-size:13.5px;margin-bottom:10px">ประวัติการเปลี่ยนแปลง (' + rows.length + ')</h4>' +
+      Views._auditDetailList(rows);
+  }).catch(function (e) { el('modalBody').innerHTML = '<div class="callout danger">' + esc(e.message) + '</div>'; });
+};
+
+Views._findTxn = function (txnId) {
+  let found = null;
+  Object.keys(State.detailCache).forEach(function (k) {
+    (State.detailCache[k].transactions || []).forEach(function (t) { if (t.txnId === txnId) found = t; });
+  });
+  if (!found && State._txnList) {
+    State._txnList.forEach(function (t) { if (t.txnId === txnId) found = t; });
+  }
+  return found;
+};
+
+/* ───────────────────────── ประวัติวงเงิน ───────────────────────── */
+Views._changeTable = function (rows) {
+  if (!rows.length) return C.empty('ยังไม่มีประวัติการปรับวงเงิน', 'เมื่อผู้ดูแลกำหนดหรือปรับวงเงิน จะบันทึกที่นี่พร้อมเอกสารแนบ', '⟲');
+  return '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+    '<th>วันที่บันทึก</th><th>ประเภท</th><th class="r">จาก</th><th class="r">เป็น</th><th class="r">เปลี่ยนแปลง</th>' +
+    '<th>เหตุผล / เลขที่อ้างอิง</th><th>ไฟล์แนบ</th><th>ผู้ดำเนินการ</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(function (c) {
+      const up = c.delta >= 0;
+      return '<tr>' +
+        '<td><div class="t-title">' + esc(Fmt.dateTime(c.createdAt)) + '</div>' +
+        '<div class="t-sub">มีผล ' + esc(Fmt.date(c.effectiveDate)) + '</div></td>' +
+        '<td><span class="pill ' + (c.changeType === 'BUDGET_AMOUNT' ? 'pill-sky' : 'pill-primary') + '">' +
+        esc(c.changeTypeLabel) + '</span></td>' +
+        '<td class="r num dim">' + Fmt.money(c.oldAmount) + '</td>' +
+        '<td class="r num"><b>' + Fmt.money(c.newAmount) + '</b></td>' +
+        '<td class="r num" style="color:' + (up ? 'var(--teal)' : 'var(--rose)') + '">' +
+        (up ? '▲ +' : '▼ ') + Fmt.money(c.delta) + '</td>' +
+        '<td style="max-width:280px">' + esc(c.reason) +
+        (c.refNo ? '<div class="t-sub">อ้างอิง: ' + esc(c.refNo) + '</div>' : '') + '</td>' +
+        '<td>' + C.attachments(c.attachments) + '</td>' +
+        '<td><div class="t-sub">' + esc(c.createdBy) + '</div></td>' +
+        '</tr>';
+    }).join('') + '</tbody></table></div>';
+};
+
+/* ───────────────────────── สิทธิ์การเข้าถึง ───────────────────────── */
+Views._permTable = function (d) {
+  const rows = d.permissions;
+  const canManage = d.canManage;
+  const active = rows.filter(function (p) { return p.status === 'ACTIVE'; });
+  return '<div class="card-head" style="border-top:none">' +
+    '<div><h3>ผู้มีสิทธิ์เข้าถึงงบนี้</h3>' +
+    '<div class="sub">ผู้ดูแลงบ ' + active.filter(function (p) { return p.role === 'ADMIN'; }).length +
+    ' คน · ผู้ดู ' + active.filter(function (p) { return p.role === 'VIEWER'; }).length + ' คน</div></div>' +
+    (canManage ? '<button class="btn btn-primary btn-sm" onclick="Forms.perm(\'' + attr(d.budgetId) + '\')">+ เพิ่มผู้ใช้</button>' : '') +
+    '</div>' +
+    (rows.length
+      ? '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+        '<th>อีเมล</th><th>สิทธิ์</th><th>สถานะ</th><th>หมายเหตุ</th><th>ให้สิทธิ์โดย</th><th class="r">จัดการ</th>' +
+        '</tr></thead><tbody>' + rows.map(function (p) {
+          return '<tr class="' + (p.status !== 'ACTIVE' ? 'cancelled' : '') + '">' +
+            '<td><div class="row" style="gap:8px"><div class="avatar" style="width:26px;height:26px;flex:0 0 26px;font-size:10px">' +
+            esc(Fmt.initials(p.email)) + '</div><b>' + esc(p.email) + '</b></div></td>' +
+            '<td>' + C.rolePill(p.role) + '</td><td>' + C.statusPill(p.status) + '</td>' +
+            '<td class="t-sub">' + esc(p.note || '—') + '</td>' +
+            '<td class="t-sub">' + esc(p.grantedBy) + '<br>' + esc(Fmt.dateTime(p.grantedAt)) + '</td>' +
+            '<td class="r"><div class="t-actions">' +
+            (canManage && p.status === 'ACTIVE'
+              ? '<button class="btn btn-outline btn-sm" onclick="Forms.perm(\'' + attr(d.budgetId) + '\',\'' +
+                attr(p.email) + '\',\'' + attr(p.role) + '\')">เปลี่ยนสิทธิ์</button>' +
+                '<button class="btn btn-ghost btn-sm" style="color:var(--rose)" onclick="Forms.permRevoke(\'' +
+                attr(p.permissionId) + '\',\'' + attr(p.email) + '\')">เพิกถอน</button>'
+              : '') + '</div></td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : C.empty('ยังไม่มีผู้ได้รับสิทธิ์', 'เพิ่มผู้ดูแลหรือผู้ดูเพื่อให้เข้าถึงงบนี้', '☺'));
+};
+
+/* ───────────────────────── รายการใช้งบทุกงบ ───────────────────────── */
+Views.transactions = function () {
+  UI.crumbs(['รายการใช้งบ']);
+  const v = el('view');
+  const f = State._txnFilter || { txnType: '', status: '', budgetId: '', keyword: '', from: '', to: '' };
+  State._txnFilter = f;
+
+  v.innerHTML =
+    '<div class="page-head"><div><h1>รายการใช้งบ</h1>' +
+    '<p>การจองและการเบิกจ่ายของทุกงบที่คุณเข้าถึงได้</p></div>' +
+    '<div class="row" id="txnActions"></div></div>' +
+    '<div class="card"><div class="card-body">' +
+    '<div class="filters">' +
+    '<div class="field"><label>ค้นหา</label><input type="text" id="fKeyword" placeholder="เลขที่ / ชื่อรายการ / คู่ค้า" value="' + attr(f.keyword) + '"></div>' +
+    '<div class="field narrow"><label>งบประมาณ</label><select id="fBudget"><option value="">ทุกงบ</option>' +
+    State.budgets.map(function (b) {
+      return '<option value="' + attr(b.budgetId) + '"' + (f.budgetId === b.budgetId ? ' selected' : '') + '>' +
+        esc(b.code + ' – ' + b.name) + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="field narrow"><label>ประเภท</label><select id="fType">' +
+    [['', 'ทั้งหมด'], ['RESERVE', 'การจอง'], ['DISBURSE', 'เบิกใช้แล้ว']].map(function (o) {
+      return '<option value="' + o[0] + '"' + (f.txnType === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="field narrow"><label>สถานะ</label><select id="fStatus">' +
+    [['', 'ทั้งหมด'], ['ACTIVE', 'ใช้งาน'], ['SETTLED', 'เบิกครบแล้ว'], ['CANCELLED', 'ยกเลิก']].map(function (o) {
+      return '<option value="' + o[0] + '"' + (f.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="field narrow"><label>ตั้งแต่</label><input type="date" id="fFrom" value="' + attr(f.from) + '"></div>' +
+    '<div class="field narrow"><label>ถึง</label><input type="date" id="fTo" value="' + attr(f.to) + '"></div>' +
+    '<button class="btn btn-primary" onclick="Views._applyTxnFilter()">ค้นหา</button>' +
+    '<button class="btn btn-ghost" onclick="State._txnFilter=null;Views.transactions()">ล้าง</button>' +
+    '</div></div><div id="txnResult"><div class="card-body"><div class="skel" style="width:45%"></div></div></div></div>';
+
+  el('fKeyword').addEventListener('keydown', function (e) { if (e.key === 'Enter') Views._applyTxnFilter(); });
+
+  const manageable = State.budgets.filter(function (b) { return b.canManage; });
+  if (manageable.length) {
+    el('txnActions').innerHTML =
+      '<button class="btn btn-teal" onclick="Forms.txn()">+ บันทึกการจอง</button>' +
+      '<button class="btn btn-primary" onclick="Forms.txn(null,\'DISBURSE\')">+ บันทึกการเบิก</button>';
+  }
+  Views._loadTxns();
+};
+
+Views._applyTxnFilter = function () {
+  State._txnFilter = {
+    keyword: el('fKeyword').value, budgetId: el('fBudget').value, txnType: el('fType').value,
+    status: el('fStatus').value, from: el('fFrom').value, to: el('fTo').value
+  };
+  Views._loadTxns();
+};
+
+Views._loadTxns = function () {
+  const f = State._txnFilter || {};
+  api('txn.list', Object.assign({ limit: 500 }, f)).then(function (res) {
+    State._txnList = res.rows;
+    const sumRes = res.rows.filter(function (t) { return t.txnType === 'RESERVE' && t.status !== 'CANCELLED'; })
+      .reduce(function (a, t) { return a + t.outstanding; }, 0);
+    const sumDis = res.rows.filter(function (t) { return t.txnType === 'DISBURSE' && t.status !== 'CANCELLED'; })
+      .reduce(function (a, t) { return a + t.amount; }, 0);
+    el('txnResult').innerHTML =
+      '<div class="card-head" style="border-top:1px solid var(--border)">' +
+      '<div><h3>พบ ' + res.total + ' รายการ' + (res.total > res.rows.length ? ' (แสดง ' + res.rows.length + ')' : '') + '</h3>' +
+      '<div class="sub">จองคงค้างรวม ' + Fmt.money(sumRes) + ' บาท · เบิกแล้วรวม ' + Fmt.money(sumDis) + ' บาท</div></div>' +
+      '</div>' + Views._txnTable(res.rows, { showBudget: true });
+  }).catch(function (e) {
+    el('txnResult').innerHTML = '<div class="card-body"><div class="callout danger"><span class="ci">✕</span><div>' +
+      esc(e.message) + '</div></div></div>';
+  });
+};
+
+/* ───────────────────────── Audit log ───────────────────────── */
+Views.audit = function () {
+  UI.crumbs(['ประวัติการเปลี่ยนแปลง']);
+  const v = el('view');
+  if (!State.user.canViewAudit) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout warn"><span class="ci">!</span><div>' +
+      'คุณไม่มีสิทธิ์ดูประวัติการเปลี่ยนแปลง</div></div></div></div>';
+    return;
+  }
+  const f = State._auditFilter || { budgetId: '', action: '', actor: '', from: '', to: '' };
+  State._auditFilter = f;
+
+  v.innerHTML =
+    '<div class="page-head"><div><h1>ประวัติการเปลี่ยนแปลง (Audit Log)</h1>' +
+    '<p>บันทึกทุกการกำหนดวงเงิน แก้ไขรายการ และเปลี่ยนสิทธิ์ — ไม่สามารถลบหรือแก้ไขได้</p></div></div>' +
+    '<div class="card"><div class="card-body"><div class="filters">' +
+    '<div class="field narrow"><label>งบประมาณ</label><select id="aBudget"><option value="">ทุกงบ</option>' +
+    State.budgets.map(function (b) {
+      return '<option value="' + attr(b.budgetId) + '"' + (f.budgetId === b.budgetId ? ' selected' : '') + '>' +
+        esc(b.code + ' – ' + b.name) + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="field narrow"><label>ประเภทการกระทำ</label><select id="aAction"><option value="">ทั้งหมด</option>' +
+    Object.keys(State.labels.action || {}).map(function (k) {
+      return '<option value="' + k + '"' + (f.action === k ? ' selected' : '') + '>' + esc(State.labels.action[k]) + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="field narrow"><label>ผู้ดำเนินการ</label><input type="text" id="aActor" placeholder="อีเมล" value="' + attr(f.actor) + '"></div>' +
+    '<div class="field narrow"><label>ตั้งแต่</label><input type="date" id="aFrom" value="' + attr(f.from) + '"></div>' +
+    '<div class="field narrow"><label>ถึง</label><input type="date" id="aTo" value="' + attr(f.to) + '"></div>' +
+    '<button class="btn btn-primary" onclick="Views._applyAudit()">ค้นหา</button>' +
+    '<button class="btn btn-ghost" onclick="State._auditFilter=null;Views.audit()">ล้าง</button>' +
+    '</div></div><div id="auditResult"><div class="card-body"><div class="skel" style="width:45%"></div></div></div></div>';
+
+  Views._loadAudit();
+};
+
+Views._applyAudit = function () {
+  State._auditFilter = {
+    budgetId: el('aBudget').value, action: el('aAction').value, actor: el('aActor').value,
+    from: el('aFrom').value, to: el('aTo').value
+  };
+  Views._loadAudit();
+};
+
+Views._loadAudit = function () {
+  api('audit.list', Object.assign({ limit: 300 }, State._auditFilter || {})).then(function (res) {
+    el('auditResult').innerHTML =
+      '<div class="card-head" style="border-top:1px solid var(--border)"><div><h3>พบ ' + res.total + ' รายการ' +
+      (res.total > res.rows.length ? ' (แสดง ' + res.rows.length + ' ล่าสุด)' : '') + '</h3></div></div>' +
+      '<div class="card-body">' + Views._auditDetailList(res.rows) + '</div>';
+  }).catch(function (e) {
+    el('auditResult').innerHTML = '<div class="card-body"><div class="callout danger">' + esc(e.message) + '</div></div>';
+  });
+};
+
+Views._auditDetailList = function (rows) {
+  if (!rows || !rows.length) return C.empty('ไม่พบบันทึก', 'ลองปรับเงื่อนไขการค้นหา', '⟲');
+  const toneOf = { AMOUNT_SET: 'amber', TXN_CREATE: 'teal', TXN_CANCEL: 'rose', PERM_REVOKE: 'rose', BUDGET_CREATE: 'teal' };
+  return '<div class="timeline">' + rows.map(function (r) {
+    const hasDiff = r.before || r.after;
+    return '<div class="tl-item ' + (toneOf[r.action] || '') + '">' +
+      '<div class="tl-head"><b>' + esc(r.actionLabel) + '</b>' +
+      (r.budgetName ? '<span class="pill">' + esc(r.budgetName.split(' – ')[0]) + '</span>' : '') +
+      '<span class="tl-time">' + esc(Fmt.dateTime(r.timestamp)) + ' · ' + esc(r.actor) + '</span></div>' +
+      '<div class="tl-body">' + esc(r.summary) +
+      (r.reason ? '<div class="dim" style="margin-top:3px">เหตุผล: ' + esc(r.reason) + '</div>' : '') + '</div>' +
+      (r.attachments && r.attachments.length ? '<div style="margin-top:6px">' + C.attachments(r.attachments) + '</div>' : '') +
+      (hasDiff ? '<div class="diff">' +
+        (r.before ? '<div class="diff-box"><h5>ก่อนแก้ไข</h5><code>' + esc(Views._fmtJson(r.before)) + '</code></div>' : '') +
+        (r.after ? '<div class="diff-box"><h5>หลังแก้ไข</h5><code>' + esc(Views._fmtJson(r.after)) + '</code></div>' : '') +
+        '</div>' : '') +
+      '</div>';
+  }).join('') + '</div>';
+};
+
+/** ป้ายภาษาไทยของฟิลด์ที่ปรากฏใน diff ของ Audit Log */
+Views.FIELD_LABELS = {
+  txn_no: 'เลขที่รายการ', txn_type: 'ประเภท', txn_date: 'วันที่', title: 'ชื่อรายการ',
+  description: 'รายละเอียด', category: 'หมวด', vendor: 'คู่ค้า/ผู้รับเงิน',
+  amount: 'จำนวนเงิน', settled_amount: 'ยอดที่ถูกเบิกแล้ว', status: 'สถานะ',
+  code: 'รหัสงบ', name: 'ชื่องบประมาณ', fiscal_year: 'ปีงบประมาณ', owner_email: 'ผู้รับผิดชอบ',
+  budget_amount: 'วงเงินงบประมาณ', usable_amount: 'จำนวนที่ใช้ได้', currency: 'สกุลเงิน',
+  email: 'อีเมล', role: 'สิทธิ์', system_role: 'สิทธิ์ระดับระบบ', display_name: 'ชื่อที่แสดง',
+  changeType: 'ประเภทการปรับ', refNo: 'เลขที่อ้างอิง'
+};
+Views.VALUE_LABELS = {
+  RESERVE: 'การจอง', DISBURSE: 'เบิกใช้แล้ว', ACTIVE: 'ใช้งาน', SETTLED: 'เบิกครบแล้ว',
+  CANCELLED: 'ยกเลิก', CLOSED: 'Close', NEW: 'New', PROCESS: 'Process', REVOKED: 'เพิกถอน', INACTIVE: 'ระงับ',
+  OWNER: 'ผู้รับผิดชอบ', TXN_MANAGER: 'ผู้จัดการรายการ', VIEWER: 'ผู้ดู', ADMIN: 'ผู้รับผิดชอบ',
+  SUPER_ADMIN: 'ผู้ดูแลระบบ', EXECUTIVE: 'ผู้บริหาร', USER: 'ผู้ใช้งาน',
+  ADMIN: 'ผู้ดูแลงบ', VIEWER: 'ผู้ดู', SUPER_ADMIN: 'ผู้ดูแลระบบ',
+  BUDGET_AMOUNT: 'วงเงินงบประมาณ', USABLE_AMOUNT: 'จำนวนที่ใช้ได้'
+};
+
+Views._fmtJson = function (o) {
+  const money = { amount: 1, settled_amount: 1, budget_amount: 1, usable_amount: 1 };
+  return Object.keys(o).filter(function (k) {
+    if (/(^_|_id$|_at$|_by$|attachment_ids)/.test(k)) return false;  // ซ่อน id และ metadata
+    return o[k] !== '' && o[k] !== null && o[k] !== undefined;
+  }).map(function (k) {
+    const v = o[k];
+    const label = Views.FIELD_LABELS[k] || k;
+    let text;
+    if (typeof v === 'number') text = Fmt.money(v) + (money[k] ? ' บาท' : '');
+    else text = Views.VALUE_LABELS[String(v)] || String(v);
+    return label + ': ' + text;
+  }).join('\n') || '—';
+};
+
+/* ───────────────────────── หลังบ้าน: งบประมาณ ───────────────────────── */
+Views.adminBudgets = function () {
+  UI.crumbs(['หลังบ้าน', 'จัดการงบประมาณ']);
+  const v = el('view');
+  UI.busy(v, true);
+
+  api('budget.list').then(function (list) {
+    const canCreate = State.user.isSuperAdmin;
+    v.innerHTML =
+      '<div class="page-head"><div><h1>จัดการงบประมาณ</h1>' +
+      '<p>กำหนดวงเงิน จำนวนที่ใช้ได้ และผู้มีสิทธิ์ — ทุกการเปลี่ยนแปลงต้องระบุเหตุผลและแนบไฟล์ได้</p></div>' +
+      (canCreate ? '<button class="btn btn-primary" onclick="Forms.budget()">+ สร้างงบประมาณ</button>' : '') +
+      '</div>' +
+      (canCreate ? '' : '<div class="callout warn" style="margin-bottom:16px"><span class="ci">!</span><div>' +
+        'คุณเป็นผู้ดูแลเฉพาะบางงบ — จัดการได้เฉพาะงบที่ได้รับสิทธิ์ (การสร้างงบใหม่ต้องเป็นผู้ดูแลระบบ)</div></div>') +
+      '<div class="card"><div class="table-wrap"><table class="tbl"><thead><tr>' +
+      '<th>รหัส / ชื่อ</th><th class="r">วงเงินงบประมาณ</th><th class="r">จำนวนที่ใช้ได้</th>' +
+      '<th class="r">จองค้าง</th><th class="r">เบิกแล้ว</th><th class="r">คงเหลือใช้ได้</th>' +
+      '<th style="min-width:150px">การใช้งบ</th><th>สถานะ</th><th class="r">จัดการ</th>' +
+      '</tr></thead><tbody>' +
+      list.map(function (b) {
+        const s = b.summary;
+        return '<tr>' +
+          '<td><div class="row" style="gap:9px"><div class="nav-bcode ' + C.statusTone(b.status) + '">' + esc(b.code) + '</div>' +
+          '<div><div class="t-title">' + esc(b.name) + '</div>' +
+          '<div class="t-sub">' + esc(b.fiscalYear || '—') + ' · ' + esc(b.ownerEmail) + '</div></div></div></td>' +
+          '<td class="r num">' + Fmt.money(s.budgetAmount, 0) + '</td>' +
+          '<td class="r num"><b>' + Fmt.money(s.usableAmount, 0) + '</b></td>' +
+          '<td class="r num" style="color:var(--amber)">' + Fmt.money(s.reservedOutstanding, 0) + '</td>' +
+          '<td class="r num" style="color:var(--primary)">' + Fmt.money(s.disbursed, 0) + '</td>' +
+          '<td class="r num" style="color:' + (s.availableToSpend <= 0 ? 'var(--rose)' : 'var(--teal)') + '"><b>' +
+          Fmt.money(s.availableToSpend, 0) + '</b></td>' +
+          '<td><div class="bar"><span class="seg-dis" style="width:' +
+          Math.min(s.usableAmount ? s.disbursed / s.usableAmount * 100 : 0, 100).toFixed(1) + '%"></span>' +
+          '<span class="seg-res" style="width:' +
+          Math.min(s.usableAmount ? s.reservedOutstanding / s.usableAmount * 100 : 0, 100).toFixed(1) + '%"></span></div>' +
+          '<div class="t-sub">' + Fmt.pct(s.usagePctOfUsable) + ' ของจำนวนที่ใช้ได้</div></td>' +
+          '<td>' + C.statusPill(b.status) + '</td>' +
+          '<td class="r"><div class="t-actions">' +
+          '<button class="btn btn-ghost btn-sm" onclick="Router.go(\'#/budget/' + attr(b.budgetId) + '\')">เปิด</button>' +
+          (b.canManage
+            ? '<button class="btn btn-primary btn-sm" onclick="Forms.amount(\'' + attr(b.budgetId) + '\')">ปรับวงเงิน</button>' +
+              '<button class="btn btn-outline btn-sm" onclick="Forms.budget(\'' + attr(b.budgetId) + '\')">แก้ไข</button>'
+            : '') + '</div></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (list.length ? '' : C.empty('ยังไม่มีงบประมาณ', 'กด "สร้างงบประมาณ" เพื่อเริ่มต้น', '⚙')) +
+      '</div>';
+  }).catch(function (e) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout danger">' + esc(e.message) + '</div></div></div>';
+  });
+};
+
+/* ───────────────────────── หลังบ้าน: ผู้ใช้ ───────────────────────── */
+
+/* ───────────────────────── หลังบ้าน: จัดการประเภท ───────────────────────── */
+Views.adminTypes = function () {
+  UI.crumbs(['หลังบ้าน', 'จัดการประเภท']);
+  const v = el('view');
+  UI.busy(v, true);
+
+  api('type.adminList').then(function (types) {
+    const active = types.filter(function (t) { return t.status === 'ACTIVE'; }).length;
+    const inactive = types.length - active;
+    const used = types.reduce(function (n, t) { return n + (t.budgetCount || 0); }, 0);
+
+    v.innerHTML =
+      '<div class="page-head"><div><h1>จัดการประเภท</h1>' +
+      '<p>ทะเบียนรหัส A–Z พร้อมชื่อ — ใช้ตอนสร้างงบและตัวกรองภาพรวม</p></div>' +
+      '<button class="btn btn-primary" onclick="Forms.type()">+ เพิ่มประเภท</button></div>' +
+
+      '<div class="grid g-4" style="margin-bottom:18px">' +
+      C.kpi({ label: 'ประเภททั้งหมด', value: types.length, unit: 'รายการ', tone: 'sky' }) +
+      C.kpi({ label: 'ใช้งาน', value: active, unit: 'รายการ', tone: 'violet' }) +
+      C.kpi({ label: 'ระงับ', value: inactive, unit: 'รายการ', tone: 'amber' }) +
+      C.kpi({ label: 'โครงการที่ใช้', value: used, unit: 'งบ', tone: 'sky' }) +
+      '</div>' +
+
+      (types.length
+        ? '<div class="card"><div class="card-head"><div><h3>ทะเบียนประเภท</h3>' +
+          '<div class="sub">รหัสซ้ำในหลายโครงการได้ · ระงับแล้วไม่โชว์ในฟอร์มสร้างงบ</div></div></div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+          '<th>รหัส</th><th>ชื่อ</th><th>คำอธิบาย</th><th class="c">โครงการ</th><th>สถานะ</th><th class="r">จัดการ</th>' +
+          '</tr></thead><tbody>' +
+          types.map(function (t) {
+            return '<tr>' +
+              '<td><span class="nav-bcode">' + esc(t.code) + '</span></td>' +
+              '<td class="t-title">' + esc(t.name) + '</td>' +
+              '<td class="t-sub" style="max-width:280px">' + esc(t.description || '—') + '</td>' +
+              '<td class="c num">' + (t.budgetCount || 0) + '</td>' +
+              '<td>' + C.statusPill(t.status) + '</td>' +
+              '<td class="r"><button class="btn btn-outline btn-sm" onclick=\'Forms.type(' +
+              JSON.stringify({
+                code: t.code, name: t.name, description: t.description || '', status: t.status
+              }) + ')\'>แก้ไข</button></td>' +
+              '</tr>';
+          }).join('') + '</tbody></table></div></div>'
+        : '<div class="card"><div class="card-body">' +
+          C.empty('ยังไม่มีประเภท', 'กด “เพิ่มประเภท” หรือรัน setup เพื่อ seed A–D', '▤') +
+          '</div></div>');
+  }).catch(function (e) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout danger">' + esc(e.message) + '</div></div></div>';
+  });
+};
+
+Views.adminUsers = function () {
+  UI.crumbs(['หลังบ้าน', 'ผู้ใช้และสิทธิ์']);
+  const v = el('view');
+  UI.busy(v, true);
+
+  api('user.list').then(function (users) {
+    v.innerHTML =
+      '<div class="page-head"><div><h1>ผู้ใช้และสิทธิ์</h1>' +
+      '<p>กำหนดผู้ดูแลระบบ และตรวจสอบว่าใครเข้าถึงงบใดได้บ้าง</p></div>' +
+      '<button class="btn btn-primary" onclick="Forms.user()">+ เพิ่มผู้ใช้</button></div>' +
+
+      '<div class="grid g-4" style="margin-bottom:18px">' +
+      C.kpi({ label: 'ผู้ใช้ทั้งหมด', value: users.length, unit: 'คน', tone: 'sky' }) +
+      C.kpi({ label: 'ผู้ดูแลระบบ', value: users.filter(function (u) { return u.systemRole === 'SUPER_ADMIN'; }).length, unit: 'คน', tone: 'violet' }) +
+      C.kpi({ label: 'ผู้บริหาร', value: users.filter(function (u) { return u.systemRole === 'EXECUTIVE'; }).length, unit: 'คน', tone: 'sky' }) +
+      C.kpi({ label: 'ผู้รับผิดชอบงบ', value: users.filter(function (u) { return u.ownerOf > 0; }).length, unit: 'คน', tone: 'amber' }) +
+      '</div>' +
+
+      '<div class="card"><div class="card-head"><div><h3>รายชื่อผู้ใช้</h3>' +
+      '<div class="sub">สิทธิ์รายงบกำหนดในฟอร์มสร้าง/แก้ไขงบประมาณ</div></div></div>' +
+      '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+      '<th>ผู้ใช้</th><th>สิทธิ์ระบบ</th><th class="c">รับผิดชอบ</th><th class="c">จัดการรายการ</th><th class="c">ผู้ดู</th>' +
+      '<th>สถานะ</th><th>หมายเหตุ</th><th class="r">จัดการ</th></tr></thead><tbody>' +
+      users.map(function (u) {
+        return '<tr>' +
+          '<td><div class="row" style="gap:9px"><div class="avatar" style="width:30px;height:30px;flex:0 0 30px;font-size:11px">' +
+          esc(Fmt.initials(u.displayName || u.email)) + '</div>' +
+          '<div><div class="t-title">' + esc(u.displayName || u.email.split('@')[0]) + '</div>' +
+          '<div class="t-sub">' + esc(u.email) + '</div></div></div></td>' +
+          '<td>' + C.sysRolePill(u.systemRole) + '</td>' +
+          '<td class="c num">' + (u.ownerOf || '—') + '</td>' +
+          '<td class="c num">' + (u.txnManagerOf || '—') + '</td>' +
+          '<td class="c num">' + (u.viewerOf || '—') + '</td>' +
+          '<td>' + C.statusPill(u.status) + '</td>' +
+          '<td class="t-sub" style="max-width:220px">' + esc(u.note || '—') + '</td>' +
+          '<td class="r"><button class="btn btn-outline btn-sm" onclick=\'Forms.user(' +
+          JSON.stringify(u.email) + ',' + JSON.stringify({
+            displayName: u.displayName, systemRole: u.systemRole, status: u.status, note: u.note
+          }) + ')\'>แก้ไข</button></td>' +
+          '</tr>';
+      }).join('') + '</tbody></table></div></div>' +
+
+      '<div class="card mt"><div class="card-head"><div><h3>ตารางสิทธิ์รายงบ</h3>' +
+      '<div class="sub">ภาพรวมว่าใครดู/ดูแลงบใดได้</div></div></div>' +
+      '<div class="card-body" id="permMatrix"><div class="skel" style="width:40%"></div></div></div>';
+
+    Views._permMatrix();
+  }).catch(function (e) {
+    v.innerHTML = '<div class="card"><div class="card-body"><div class="callout danger">' + esc(e.message) + '</div></div></div>';
+  });
+};
+
+Views._permMatrix = function () {
+  Promise.all(State.budgets.map(function (b) {
+    return api('perm.list', { budgetId: b.budgetId }).then(function (rows) {
+      return { budget: b, rows: rows.filter(function (p) { return p.status === 'ACTIVE'; }) };
+    });
+  })).then(function (all) {
+    const node = el('permMatrix');
+    if (!node) return;
+    if (!all.length) { node.innerHTML = C.empty('ยังไม่มีงบประมาณ', '', '⚙'); return; }
+    node.innerHTML = '<div class="stack">' + all.map(function (g) {
+      const admins = g.rows.filter(function (p) { return p.role === 'ADMIN'; });
+      const viewers = g.rows.filter(function (p) { return p.role === 'VIEWER'; });
+      return '<div style="border:1px solid var(--border);border-radius:var(--r);padding:14px">' +
+        '<div class="row-between" style="margin-bottom:10px">' +
+        '<div class="row" style="gap:9px"><div class="nav-bcode">' + esc(g.budget.code) + '</div>' +
+        '<b>' + esc(g.budget.name) + '</b></div>' +
+        '<button class="btn btn-outline btn-sm" onclick="Forms.perm(\'' + attr(g.budget.budgetId) + '\')">+ ให้สิทธิ์</button></div>' +
+        '<div style="font-size:12.8px"><div style="margin-bottom:6px"><span class="pill pill-primary">ผู้ดูแลงบ</span> ' +
+        (admins.length ? admins.map(function (p) { return esc(p.email); }).join(', ') : '<span class="dim">—</span>') + '</div>' +
+        '<div><span class="pill pill-sky">ผู้ดู</span> ' +
+        (viewers.length ? viewers.map(function (p) { return esc(p.email); }).join(', ') : '<span class="dim">—</span>') + '</div></div></div>';
+    }).join('') + '</div>';
+  });
+};
+</script>
