@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>คู่มือระบบบริหารงบประมาณ · Budget Allocation</title>
+  <meta name="description" content="คู่มือเชิงภาพสำหรับระบบบริหารงบประมาณ คณะสัตวแพทยศาสตร์">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai+Looped:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="images/logo-ku.png" type="image/png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-nav">
+    <div class="site-nav-inner">
+      <a class="brand" href="#top">
+        <img src="images/logo-ku.png" alt="KU">
+        <strong>คู่มือระบบบริหารงบประมาณ</strong>
+      </a>
+      <nav class="nav-links" aria-label="หัวข้อ">
+        <div class="nav-row">
+          <a href="#overview">ภาพรวม</a>
+          <a href="#nav">เมนู</a>
+          <a href="#roles">สิทธิ์</a>
+          <a href="#story">ลำดับใช้งบ</a>
+          <a href="#admin-budgets">จัดการงบ</a>
+          <a href="#budget-detail">หน้างบ</a>
+        </div>
+        <div class="nav-row">
+          <a href="#txn">จอง–เบิก</a>
+          <a href="#lists">รายการ</a>
+          <a href="#admin-more">หลังบ้าน</a>
+          <a href="#rules">กฎ</a>
+          <a href="#fields">ฟิลด์</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" data-section id="overview">
+      <div class="reveal">
+        <div class="hero-kicker">Budget Allocation Manual</div>
+        <h1>เห็นภาพรวมชัด<br><em>จัดการงบเป็นระบบ</em></h1>
+        <p class="hero-lead">
+          คู่มือนี้พาชมหน้าจอจริงของระบบ — จากภาพรวมและเมนูนำทาง ไปจนถึงการสร้างงบ จอง–เบิก
+          และงานผู้ดูแลระบบ กดลูกศรเพื่อเลื่อนภาพ หรือคลิกภาพเพื่อขยาย
+        </p>
+      </div>
+
+      <div class="carousel reveal" aria-label="ตัวอย่างหน้าจอระบบ">
+        <div class="carousel-track">
+          <div class="carousel-slide active" data-caption="ภาพรวมงบประมาณ — KPI รวม ตัวกรอง และกราฟ">
+            <img src="images/SS_manual/1_1.png" alt="ภาพรวมงบประมาณ มุมมองเต็ม">
+          </div>
+          <div class="carousel-slide" data-caption="ภาพรวม — การ์ดโครงการและสถานะ New / Process / Close">
+            <img src="images/SS_manual/1_2.png" alt="ภาพรวมงบประมาณ ส่วนโครงการ">
+          </div>
+          <div class="carousel-slide" data-caption="ภาพรวม — สัดส่วนการใช้งบและความเคลื่อนไหว">
+            <img src="images/SS_manual/1_3.png" alt="ภาพรวมงบประมาณ ส่วนกราฟ">
+          </div>
+          <div class="carousel-slide" data-caption="หน้างบโครงการ — สรุปยอดจอง เบิก และคงเหลือ">
+            <img src="images/SS_manual/4_1.png" alt="หน้ารายละเอียดงบประมาณ">
+          </div>
+          <div class="carousel-slide" data-caption="รายการใช้งบทั้งระบบ — ติดตามจองและเบิกข้ามโครงการ">
+            <img src="images/SS_manual/6.png" alt="หน้ารายการใช้งบ">
+          </div>
+        </div>
+        <div class="carousel-footer">
+          <p class="carousel-caption"></p>
+          <div class="carousel-controls">
+            <button type="button" class="carousel-btn" data-carousel="prev" aria-label="ภาพก่อนหน้า">‹</button>
+            <div class="carousel-dots"></div>
+            <button type="button" class="carousel-btn" data-carousel="next" aria-label="ภาพถัดไป">›</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="nav">
+      <div class="section-head reveal">
+        <div class="eyebrow">เมนูและการนำทาง</div>
+        <h2>รู้จักพื้นที่ทำงานกันก่อน</h2>
+        <p>แสดงหน้าที่ของเมนูด้านซ้ายมือของ application</p>
+      </div>
+      <div class="split topic-switch reveal">
+        <div class="topic-list">
+          <button type="button" class="topic-btn active" data-target="view">
+            <div class="n">ส่วนดูข้อมูล</div>
+            <h3>ภาพรวม · รายการใช้งบ · ประวัติ</h3>
+            <p>จุดเข้าหลักสำหรับติดตามยอดและรายการ</p>
+          </button>
+          <button type="button" class="topic-btn" data-target="budgets">
+            <div class="n">งบประมาณ</div>
+            <h3>รายโครงการที่คุณเข้าถึงได้</h3>
+            <p>แสดงเฉพาะงบที่มีสิทธิ์ และเลื่อนได้เมื่อรายการยาว</p>
+          </button>
+          <button type="button" class="topic-btn" data-target="admin">
+            <div class="n">ผู้ดูแลระบบ</div>
+            <h3>เมนูลอยจากบล็อกผู้ใช้</h3>
+            <p>จัดการงบ · ประเภท · ผู้ใช้และสิทธิ์</p>
+          </button>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="view"><img src="images/SS_manual/2_1.png" alt="เมนูส่วนดูข้อมูล"></div>
+          <div class="shot-pane" data-pane="budgets"><img src="images/SS_manual/2_2.png" alt="รายชื่องบประมาณในแถบซ้าย"></div>
+          <div class="shot-pane" data-pane="admin"><img src="images/SS_manual/2_3.png" alt="เมนูสำหรับผู้ดูแลระบบ"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="roles">
+      <div class="section-head reveal">
+        <div class="eyebrow">สิทธิ์</div>
+        <h2>บทบาทของผู้ใช้แต่ละสิทธิ์</h2>
+        <p>สลับปุ่มด้านล่างเพื่อดูความสามารถหลักของแต่ละสิทธิ์ รวมถึงผู้บริหาร และบัญชีอีเมลนอก KU</p>
+      </div>
+      <div class="role-panel role-panel-wide reveal">
+        <div class="role-tabs">
+          <button type="button" class="role-tab active" data-role="viewer">ผู้ดู</button>
+          <button type="button" class="role-tab" data-role="txn">ผู้จัดการรายการ</button>
+          <button type="button" class="role-tab" data-role="owner">ผู้รับผิดชอบ</button>
+          <button type="button" class="role-tab" data-role="exec">ผู้บริหาร</button>
+          <button type="button" class="role-tab" data-role="admin">ผู้ดูแลระบบ</button>
+          <button type="button" class="role-tab role-tab-warn" data-role="outsider">ผู้ใช้ email นอก KU</button>
+        </div>
+        <div class="role-body active" data-role="viewer">
+          <div class="role-grid role-grid-4">
+            <div class="perm on"><strong>ดูยอดและรายการ</strong><span>Dashboard ของงบที่ได้รับสิทธิ์</span></div>
+            <div class="perm off"><strong>จอง / เบิก</strong><span>ไม่มีสิทธิ์บันทึกรายการ</span></div>
+            <div class="perm off"><strong>ปรับวงเงิน</strong><span>แก้ไขข้อมูลงบไม่ได้</span></div>
+            <div class="perm off"><strong>ดู Audit</strong><span>ไม่เห็นประวัติการเปลี่ยนแปลง</span></div>
+          </div>
+        </div>
+        <div class="role-body" data-role="txn">
+          <div class="role-grid role-grid-4">
+            <div class="perm on"><strong>ดูยอดและรายการ</strong><span>ติดตามจอง–เบิกได้</span></div>
+            <div class="perm on"><strong>จอง / เบิก</strong><span>เพิ่ม แก้ไข ยกเลิกรายการได้</span></div>
+            <div class="perm off"><strong>ปรับวงเงิน</strong><span>ต้องเป็นผู้รับผิดชอบ</span></div>
+            <div class="perm on"><strong>ดู Audit ของงบตน</strong><span>เห็นประวัติเฉพาะงบที่เกี่ยวข้อง</span></div>
+          </div>
+        </div>
+        <div class="role-body" data-role="owner">
+          <div class="role-grid role-grid-4">
+            <div class="perm on"><strong>ดูยอดและรายการ</strong><span>ครบทุกมุมของงบตน</span></div>
+            <div class="perm on"><strong>จอง / เบิก</strong><span>บันทึกรายการได้</span></div>
+            <div class="perm on"><strong>ปรับวงเงิน / แก้ข้อมูลงบ</strong><span>เก็บประวัติ BudgetChanges</span></div>
+            <div class="perm on"><strong>ดู Audit</strong><span>พร้อมแนบเหตุผลทุกครั้งที่แก้</span></div>
+          </div>
+        </div>
+        <div class="role-body" data-role="exec">
+          <div class="role-grid role-grid-4">
+            <div class="perm on"><strong>ดูทุกโครงการ</strong><span>เห็นงบทั้งหมดแบบภาพรวม</span></div>
+            <div class="perm on"><strong>ดูภาพรวม / กราฟ</strong><span>Dashboard สำหรับผู้บริหาร</span></div>
+            <div class="perm on"><strong>ดูประวัติการเปลี่ยนแปลง</strong><span>อ่านอย่างเดียวทั้งระบบ</span></div>
+            <div class="perm off"><strong>สร้างงบ / จอง–เบิก / ปรับวงเงิน</strong><span>ไม่สามารถแก้ไขข้อมูลได้</span></div>
+          </div>
+        </div>
+        <div class="role-body" data-role="admin">
+          <div class="role-grid role-grid-4">
+            <div class="perm on"><strong>ทุกโครงการ + ภาพรวม</strong><span>เห็นงบทั้งหมดในระบบ</span></div>
+            <div class="perm on"><strong>สร้างงบ / จัดการประเภท</strong><span>ทะเบียน A–Z และผู้ใช้</span></div>
+            <div class="perm on"><strong>ย้ายชุดรายการข้ามงบ</strong><span>เมื่อต้องปรับโครงสร้าง</span></div>
+            <div class="perm on"><strong>ปิดงบ / Audit ทั้งระบบ</strong><span>ควบคุมวงจรชีวิตโครงการ</span></div>
+          </div>
+        </div>
+        <div class="role-body" data-role="outsider">
+          <div class="role-denied">
+            <strong>ไม่สามารถเข้าใช้งานระบบได้</strong>
+            <p>บัญชีอีเมลนอกโดเมน KU (เช่น ไม่ใช่ @ku.th) จะไม่ได้รับสิทธิ์เข้าสู่ระบบบริหารงบประมาณ — ต้องใช้บัญชีองค์กรที่ได้รับอนุญาตเท่านั้น</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="story">
+      <div class="section-head reveal">
+        <div class="eyebrow">ลำดับการใช้งบ</div>
+        <h2>จากวงเงิน → จอง → เบิก</h2>
+        <p>คลิกขั้นตอนด้านซ้าย ภาพด้านขวาจะเล่าลำดับการใช้งบให้เห็นภาพเดียวต่อเนื่อง</p>
+      </div>
+      <div class="split story-switch reveal">
+        <div>
+          <div class="story-steps">
+            <button type="button" class="story-step active" data-target="s1">
+              <div class="n">ขั้นที่ 1</div>
+              <h3>ตั้งงบและจำนวนที่ใช้ได้</h3>
+              <p>วงเงินทั้งก้อน vs เพดานที่อนุญาตให้จอง/เบิก</p>
+            </button>
+            <button type="button" class="story-step" data-target="s2">
+              <div class="n">ขั้นที่ 2</div>
+              <h3>จองวงเงิน</h3>
+              <p>กันยอดไว้ล่วงหน้า ลด “ใช้ได้อีก” ทันที</p>
+            </button>
+            <button type="button" class="story-step" data-target="s3">
+              <div class="n">ขั้นที่ 3</div>
+              <h3>เบิกจากรายการจอง</h3>
+              <p>หักจากจองต้นทาง ไม่นับวงเงินซ้ำ</p>
+            </button>
+            <button type="button" class="story-step" data-target="s4">
+              <div class="n">ขั้นที่ 4</div>
+              <h3>สถานะและกฎเหล็ก</h3>
+              <p>New→Process อัตโนมัติ · <span class="warn-red">ห้ามยกเลิกจองที่มีเบิกค้าง</span></p>
+            </button>
+          </div>
+          <div class="story-progress" aria-hidden="true"><span></span></div>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="s1"><img src="images/SS_manual/3_4.png" alt="ตั้งวงเงินและจำนวนที่ใช้ได้"></div>
+          <div class="shot-pane" data-pane="s2"><img src="images/SS_manual/5_1.png" alt="ฟอร์มการจอง"></div>
+          <div class="shot-pane" data-pane="s3"><img src="images/SS_manual/5_2.png" alt="ฟอร์มเบิกใช้แล้ว"></div>
+          <div class="shot-pane" data-pane="s4"><img src="images/SS_manual/4_1.png" alt="หน้างบหลังมีรายการเคลื่อนไหว"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="admin-budgets">
+      <div class="section-head reveal">
+        <div class="eyebrow">หลังบ้าน · จัดการงบประมาณ</div>
+        <h2>สร้างและดูแลโครงการงบ</h2>
+        <p>เลือกหัวข้อด้านล่างเพื่อดูหน้าจอจริงในแต่ละขั้นตอน — จากปุ่มสร้าง ไปจนถึงปรับวงเงิน</p>
+      </div>
+      <div class="feature-block reveal">
+        <h3>จัดการงบประมาณ</h3>
+        <p class="lead">ตารางโครงการทั้งหมดที่ดูแลได้ พร้อมยอดจอง เบิก คงเหลือ และปุ่มจัดการ</p>
+        <div class="chip-tabs">
+          <button type="button" class="chip active" data-target="a1">1 สร้าง / รายการงบ</button>
+          <button type="button" class="chip" data-target="a2">2 ประเภทและชื่อ</button>
+          <button type="button" class="chip" data-target="a3">3 ผู้เกี่ยวข้อง</button>
+          <button type="button" class="chip" data-target="a4">4 รายละเอียดงบ</button>
+          <button type="button" class="chip" data-target="a5">5 การแก้ไข</button>
+          <button type="button" class="chip" data-target="a6">6 ปรับวงเงิน</button>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="a1"><img src="images/SS_manual/3_1.png" alt="หน้าจัดการงบประมาณและปุ่มสร้าง"></div>
+          <div class="shot-pane" data-pane="a2"><img src="images/SS_manual/3_2.png" alt="กำหนดประเภทงบและชื่อโครงการ"></div>
+          <div class="shot-pane" data-pane="a3"><img src="images/SS_manual/3_3.png" alt="กำหนดผู้รับผิดชอบและผู้เกี่ยวข้อง"></div>
+          <div class="shot-pane" data-pane="a4"><img src="images/SS_manual/3_4.png" alt="รายละเอียดงบและที่มาของงบ"></div>
+          <div class="shot-pane" data-pane="a5"><img src="images/SS_manual/3_5.png" alt="ฟอร์มแก้ไขข้อมูลงบ"></div>
+          <div class="shot-pane" data-pane="a6"><img src="images/SS_manual/3_6.png" alt="ฟอร์มปรับวงเงิน"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="budget-detail">
+      <div class="section-head reveal">
+        <div class="eyebrow">หน้างบโครงการ</div>
+        <h2>เจาะลึกหนึ่งงบด้วยแท็บตามประเภทข้อมูล</h2>
+        <p>เปิดจากรายชื่อในเมนูซ้ายหรือการ์ดภาพรวม — ดูสรุปยอด รายการ วงเงิน สิทธิ์ และบันทึกตรวจสอบ</p>
+      </div>
+      <div class="feature-block reveal">
+        <h3>รายละเอียดงบประมาณ</h3>
+        <p class="lead">แต่ละแท็บแสดงรายละเอียดแต่ละประเภทข้อมูล กดเพื่อสลับภาพประกอบ</p>
+        <div class="chip-tabs">
+          <button type="button" class="chip active" data-target="b1">1 ข้อมูลรวม</button>
+          <button type="button" class="chip" data-target="b2">2 สรุปยอด</button>
+          <button type="button" class="chip" data-target="b3">3 รายการใช้งบ</button>
+          <button type="button" class="chip" data-target="b4">4 ประวัติวงเงิน</button>
+          <button type="button" class="chip" data-target="b5">5 สิทธิ์การเข้าถึง</button>
+          <button type="button" class="chip" data-target="b6">6 บันทึกตรวจสอบ</button>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="b1"><img src="images/SS_manual/4_1.png" alt="หน้างบ — ข้อมูลรวม"></div>
+          <div class="shot-pane" data-pane="b2"><img src="images/SS_manual/4_2.png" alt="หน้างบ — หน้าต่างสรุป"></div>
+          <div class="shot-pane" data-pane="b3"><img src="images/SS_manual/4_3.png" alt="หน้างบ — รายการใช้งบ"></div>
+          <div class="shot-pane" data-pane="b4"><img src="images/SS_manual/4_4.png" alt="หน้างบ — ประวัติวงเงิน"></div>
+          <div class="shot-pane" data-pane="b5"><img src="images/SS_manual/4_5.png" alt="หน้างบ — สิทธิ์การเข้าถึง"></div>
+          <div class="shot-pane" data-pane="b6"><img src="images/SS_manual/4_6.png" alt="หน้างบ — บันทึกการตรวจสอบ"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="txn">
+      <div class="section-head reveal">
+        <div class="eyebrow">บันทึกการใช้งบ</div>
+        <h2>บันทึกการจองงบ และเบิกใช้</h2>
+        <p>การจองกันวงเงินไว้ล่วงหน้า การเบิกใช้แล้วตัดยอดจริง — ถ้าผูกกับจอง ระบบจะไม่นับวงเงินซ้ำ</p>
+      </div>
+      <div class="dual reveal">
+        <div class="feature-block" style="margin:0">
+          <h3>1 การจอง</h3>
+          <p class="lead">ลดยอด “ใช้ได้อีก” ทันที แต่ยังไม่ใช่รายจ่ายจริง ต้องระบุเหตุผลและแนบไฟล์ได้</p>
+          <div class="shot-frame"><img src="images/SS_manual/5_1.png" alt="ฟอร์มบันทึกการจอง"></div>
+        </div>
+        <div class="feature-block" style="margin:0">
+          <h3>2 เบิกใช้แล้ว</h3>
+          <p class="lead">เบิกตรงหรือเบิกจากรายการจอง — เมื่อเบิกครบ จองจะเป็นสถานะเบิกครบแล้ว</p>
+          <div class="shot-frame"><img src="images/SS_manual/5_2.png" alt="ฟอร์มบันทึกการเบิกใช้แล้ว"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="lists">
+      <div class="section-head reveal">
+        <div class="eyebrow">มุมมองข้ามโครงการ</div>
+        <h2>รายการใช้งบ และประวัติการเปลี่ยนแปลง</h2>
+        <p>ติดตามทุกการจอง–เบิกในที่เดียว และย้อนดู Audit เมื่อต้องการตรวจสอบ</p>
+      </div>
+      <div class="dual reveal">
+        <div class="feature-block" style="margin:0">
+          <h3>เมนูรายการใช้งบ</h3>
+          <p class="lead">รวมรายการจากงบที่คุณเข้าถึงได้ กรองตามประเภทหรือสถานะเพื่อหาเอกสารประกอบเร็วขึ้น</p>
+          <div class="shot-frame"><img src="images/SS_manual/6.png" alt="หน้ารายการใช้งบ"></div>
+        </div>
+        <div class="feature-block" style="margin:0">
+          <h3>เมนูประวัติการเปลี่ยนแปลง</h3>
+          <p class="lead">บันทึกใครทำอะไร เมื่อไหร่ พร้อมเหตุผลและไฟล์แนบ — ผู้ดูทั่วไปจะไม่เห็นเมนูนี้</p>
+          <div class="shot-frame"><img src="images/SS_manual/7.png" alt="หน้าประวัติการเปลี่ยนแปลง"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="admin-more">
+      <div class="section-head reveal">
+        <div class="eyebrow">หลังบ้านเพิ่มเติม</div>
+        <h2>ประเภทงบ และผู้ใช้–สิทธิ์</h2>
+        <p>ทะเบียนประเภท A–Z สำหรับสร้างงบ และจัดการบัญชีผู้ใช้ระดับระบบพร้อมสิทธิ์รายงบ</p>
+      </div>
+      <div class="feature-block reveal">
+        <h3>จัดการประเภทงบ</h3>
+        <p class="lead">กดหัวข้อเพื่อสลับระหว่างรายการที่สร้างแล้ว กับฟอร์มเพิ่มประเภท</p>
+        <div class="chip-tabs">
+          <button type="button" class="chip active" data-target="t1">1 รายการประเภท</button>
+          <button type="button" class="chip" data-target="t2">2 เพิ่มประเภท</button>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="t1"><img src="images/SS_manual/8_1.png" alt="รายการประเภทงบที่สร้างแล้ว"></div>
+          <div class="shot-pane" data-pane="t2"><img src="images/SS_manual/8_2.png" alt="ฟอร์มเพิ่มประเภทงบ"></div>
+        </div>
+      </div>
+      <div class="feature-block reveal">
+        <h3>ผู้ใช้และสิทธิ์</h3>
+        <p class="lead">ตั้งบทบาทระดับระบบ ดูตารางสิทธิ์รายงบ และมอบหมายผู้รับผิดชอบ / ผู้จัดการรายการ / ผู้ดู</p>
+        <div class="chip-tabs">
+          <button type="button" class="chip active" data-target="u1">1 รายชื่อผู้ใช้</button>
+          <button type="button" class="chip" data-target="u2">2 เพิ่มผู้ใช้</button>
+          <button type="button" class="chip" data-target="u3">3 ตารางสิทธิ์</button>
+          <button type="button" class="chip" data-target="u4">4 ให้สิทธิ์</button>
+        </div>
+        <div class="shot-frame">
+          <div class="shot-pane active" data-pane="u1"><img src="images/SS_manual/9_1.png" alt="รายชื่อผู้ใช้ในระบบ"></div>
+          <div class="shot-pane" data-pane="u2"><img src="images/SS_manual/9_2.png" alt="ฟอร์มเพิ่มผู้ใช้"></div>
+          <div class="shot-pane" data-pane="u3"><img src="images/SS_manual/9_3.png" alt="ตารางสิทธิ์รายงบ"></div>
+          <div class="shot-pane" data-pane="u4"><img src="images/SS_manual/9_4.png" alt="ฟอร์มให้สิทธิ์"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-section id="rules">
+      <div class="rules reveal">
+        <div class="eyebrow" style="color:var(--lime)">Rules</div>
+        <h2>กฎสั้น ๆ ที่ควรจำตอนใช้จริง</h2>
+        <ol>
+          <li><strong>เปลี่ยนข้อมูลสำคัญต้องมีเหตุผล</strong> และแนบไฟล์ได้ทุกครั้ง</li>
+          <li><strong>จำนวนที่ใช้ได้ต้องไม่เกินวงเงิน</strong></li>
+          <li><strong>ห้ามทำรายการจนยอดใช้ได้อีกติดลบ</strong></li>
+          <li><strong>สร้างงบได้เฉพาะประเภทที่สถานะใช้งาน</strong></li>
+          <li><strong>งบ Close อ่านอย่างเดียว</strong> — ห้ามเพิ่ม/แก้รายการ</li>
+          <li><strong>New เปลี่ยนเป็น Process อัตโนมัติ</strong> เมื่อมีการจองหรือเบิก</li>
+          <li><strong>เบิกจากจองต้องไม่เกินยอดจองคงเหลือ</strong></li>
+          <li><strong>ห้ามยกเลิกจองที่มีเบิกอ้างอิงค้าง</strong></li>
+          <li><strong>เมนูซ้ายแสดงเฉพาะงบที่เข้าถึงได้</strong></li>
+          <li><strong>งานผู้ดูแลเปิดจากบล็อกผู้ใช้</strong> ไม่ปนกับเมนูดูข้อมูล</li>
+        </ol>
+      </div>
+
+      <div class="field-catalog reveal" id="fields">
+        <h2>ตารางฟิลด์ข้อมูลทั้งระบบ</h2>
+        <p>สรุปช่องที่ผู้ใช้กรอก/เลือกในแต่ละเมนู — หากเป็นตัวเลือก จะระบุรายการตัวเลือกไว้ในคอลัมน์ขวาสุด</p>
+        <div class="table-wrap">
+          <table class="field-table">
+            <thead>
+              <tr>
+                <th>เมนู</th>
+                <th>ชื่อ field ข้อมูล</th>
+                <th>ลักษณะข้อมูลที่กรอก</th>
+                <th>ตัวเลือก (ถ้าเป็นการเลือก)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ประเภทงบประมาณ</td>
+                <td>เลือกจากทะเบียนประเภทที่สถานะใช้งาน</td>
+                <td class="opts">รหัส A–Z ตามที่ตั้งใน “จัดการประเภท” เช่น A พัฒนาระบบ / ดิจิทัล, B บำรุงรักษา, C ฝึกอบรม, D สำรอง</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ปีงบประมาณ / ช่วงเวลา</td>
+                <td>ข้อความอิสระ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ชื่อโครงการ</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>คำอธิบาย</td>
+                <td>ข้อความยาว (ไม่บังคับ)</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ผู้รับผิดชอบ</td>
+                <td>เลือกหลายอีเมล (อย่างน้อย 1)</td>
+                <td class="opts">รายชื่อผู้ใช้ในระบบ / พิมพ์อีเมลโดเมนองค์กร</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ผู้จัดการรายการ</td>
+                <td>เลือกหลายอีเมล (ไม่บังคับ)</td>
+                <td class="opts">เช่นเดียวกับผู้รับผิดชอบ</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้าง / แก้ไขงบ</td>
+                <td>ผู้ดู (dashboard)</td>
+                <td>เลือกหลายอีเมล (ไม่บังคับ)</td>
+                <td class="opts">เช่นเดียวกับผู้รับผิดชอบ</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้างงบ</td>
+                <td>วงเงินงบประมาณ (บาท)</td>
+                <td>ตัวเลขทศนิยม ≥ 0 บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้างงบ</td>
+                <td>จำนวนที่ใช้ได้ (บาท)</td>
+                <td>ตัวเลข ≤ วงเงิน</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้างงบ</td>
+                <td>รายละเอียด/ที่มาของงบ</td>
+                <td>ข้อความเหตุผล บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">สร้างงบ</td>
+                <td>เลขที่เอกสารอ้างอิง</td>
+                <td>ข้อความ (ไม่บังคับ)</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">แก้ไขงบ</td>
+                <td>สถานะงบประมาณ</td>
+                <td>เลือกค่าเดียว</td>
+                <td class="opts">New · Process · Close</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">แก้ไขงบ</td>
+                <td>เหตุผลการแก้ไข</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ปรับวงเงิน</td>
+                <td>วงเงินงบประมาณใหม่</td>
+                <td>ตัวเลข</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ปรับวงเงิน</td>
+                <td>จำนวนที่ใช้ได้ใหม่</td>
+                <td>ตัวเลข ≤ วงเงินใหม่</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ปรับวงเงิน</td>
+                <td>วันที่มีผล</td>
+                <td>วันที่ (date)</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ปรับวงเงิน</td>
+                <td>เลขที่เอกสารอ้างอิง</td>
+                <td>ข้อความ (ไม่บังคับ)</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ปรับวงเงิน</td>
+                <td>รายละเอียดการเปลี่ยนแปลง</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>งบประมาณ / โครงการ</td>
+                <td>เลือกงบที่จัดการได้</td>
+                <td class="opts">รายการงบตามสิทธิ์ของผู้ใช้</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>ประเภทรายการ</td>
+                <td>สลับโหมดฟอร์ม</td>
+                <td class="opts">การจอง (RESERVE) · เบิกใช้แล้ว (DISBURSE)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">เบิกใช้แล้ว</td>
+                <td>เบิกจากรายการจอง</td>
+                <td>เลือกหรือเว้นว่าง (เบิกตรง)</td>
+                <td class="opts">รายการจองที่ยัง ACTIVE ของงบนั้น</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>จำนวนเงิน (บาท)</td>
+                <td>ตัวเลข &gt; 0 บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>วันที่รายการ</td>
+                <td>วันที่</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>ชื่อ/รายละเอียดรายการ</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>หมวด</td>
+                <td>ข้อความอิสระ</td>
+                <td class="opts">เช่น ครุภัณฑ์ / จ้างเหมา / เดินทาง</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>คู่ค้า / ผู้รับเงิน</td>
+                <td>ข้อความ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>เลขที่รายการ</td>
+                <td>ข้อความ หรือเว้นว่างให้ระบบสร้าง</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก</td>
+                <td>หมายเหตุเพิ่มเติม</td>
+                <td>ข้อความยาว</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จอง / เบิก / แก้งบ</td>
+                <td>ไฟล์แนบ</td>
+                <td>อัปโหลดหลายไฟล์</td>
+                <td class="opts">PDF, รูป, Excel, Word · ≤ 10 MB/ไฟล์ · สูงสุด 5 ไฟล์/ครั้ง</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">แก้ไข / ยกเลิกรายการ</td>
+                <td>เหตุผล</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ย้ายรายการ (ผู้ดูแล)</td>
+                <td>งบปลายทาง</td>
+                <td>เลือกงบอื่น</td>
+                <td class="opts">งบที่ยังไม่ปิดและไม่ใช่งบต้นทาง</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จัดการประเภท</td>
+                <td>รหัสประเภท</td>
+                <td>ตัวอักษร A–Z ตัวเดียว (ตอนสร้าง)</td>
+                <td class="opts">A … Z (ห้ามซ้ำ)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จัดการประเภท</td>
+                <td>ชื่อประเภท</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จัดการประเภท</td>
+                <td>คำอธิบาย</td>
+                <td>ข้อความ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จัดการประเภท</td>
+                <td>สถานะ</td>
+                <td>เลือกค่าเดียว</td>
+                <td class="opts">ใช้งาน (ACTIVE) · ระงับ (INACTIVE)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">จัดการประเภท</td>
+                <td>เหตุผล (Audit)</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ผู้ใช้ระบบ</td>
+                <td>อีเมล Google</td>
+                <td>อีเมล บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ผู้ใช้ระบบ</td>
+                <td>ชื่อที่แสดง</td>
+                <td>ข้อความ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ผู้ใช้ระบบ</td>
+                <td>สิทธิ์ระดับระบบ</td>
+                <td>เลือกค่าเดียว</td>
+                <td class="opts">ผู้ใช้งาน (USER) · ผู้บริหาร (EXECUTIVE) · ผู้ดูแลระบบ (SUPER_ADMIN)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ผู้ใช้ระบบ</td>
+                <td>สถานะ</td>
+                <td>เลือกค่าเดียว</td>
+                <td class="opts">ใช้งาน (ACTIVE) · ระงับการใช้งาน (INACTIVE)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ผู้ใช้ระบบ</td>
+                <td>หมายเหตุ</td>
+                <td>ข้อความ (ตำแหน่ง/หน่วยงาน)</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ให้สิทธิ์รายงบ</td>
+                <td>อีเมลผู้ใช้</td>
+                <td>อีเมล บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ให้สิทธิ์รายงบ</td>
+                <td>ระดับสิทธิ์</td>
+                <td>เลือกค่าเดียว</td>
+                <td class="opts">ผู้รับผิดชอบ (OWNER) · ผู้จัดการรายการ (TXN_MANAGER) · ผู้ดู (VIEWER)</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ให้สิทธิ์รายงบ</td>
+                <td>หมายเหตุ</td>
+                <td>ข้อความ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">เพิกถอนสิทธิ์</td>
+                <td>เหตุผลการเพิกถอน</td>
+                <td>ข้อความ บังคับ</td>
+                <td class="opts">—</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ภาพรวมงบประมาณ</td>
+                <td>ตัวกรองสถานะ</td>
+                <td>เลือกได้หลายค่า</td>
+                <td class="opts">New · Process · Close</td>
+              </tr>
+              <tr>
+                <td class="menu-cell">ภาพรวมงบประมาณ</td>
+                <td>ตัวกรองประเภท / หมวด</td>
+                <td>เลือกได้หลายค่า</td>
+                <td class="opts">รหัสจากทะเบียนประเภทที่ใช้งาน</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div>คู่มือระบบบริหารงบประมาณ · จัดทำโดย anmkr57 @ 22 Sep 2026, 21:30 version 2.1.2</div>
+    <div>ตัวอย่างการทำ Dashboard สำหรับผู้บริหาร</div>
+  </footer>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="ขยายภาพ">
+    <button type="button" class="lightbox-close" aria-label="ปิด">✕</button>
+    <img id="lightboxImg" alt="">
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
